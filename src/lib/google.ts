@@ -4,7 +4,7 @@ import { FOLDER_MIME, SHORTCUT_MIME, type Account, type DriveItem, type DriveSou
 
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
 const API = 'https://www.googleapis.com/drive/v3'
-const FIELDS = 'id,name,mimeType,size,modifiedTime,driveId,iconLink,shortcutDetails'
+const FIELDS = 'id,name,mimeType,size,md5Checksum,modifiedTime,driveId,iconLink,shortcutDetails'
 
 export const VIRTUAL = {
   myDrive: '@my-drive',
@@ -169,13 +169,13 @@ export class GoogleDriveSource implements DriveSource {
   }
 
   /** Fetch with auth, plus retries for rate limits, server errors and dropped connections. */
-  private async request(url: string, signal?: AbortSignal): Promise<Response> {
+  private async request(url: string, signal?: AbortSignal, headers: Record<string, string> = {}): Promise<Response> {
     let token = await this.tokens.get()
     let renewed = false
     for (let attempt = 0; ; attempt++) {
       let r: Response
       try {
-        r = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal })
+        r = await fetch(url, { headers: { ...headers, Authorization: `Bearer ${token}` }, signal })
       } catch (e) {
         if (signal?.aborted || attempt >= 5) throw e
         await sleep(backoff(attempt), signal)
@@ -265,20 +265,16 @@ export class GoogleDriveSource implements DriveSource {
     return this.listQuery({ q: `name contains '${escapeQuery(text)}' and trashed = false`, corpora: 'allDrives' }, signal)
   }
 
-  async open(item: DriveItem, exportMime: string | null, signal?: AbortSignal): Promise<Response> {
+  async open(item: DriveItem, exportMime: string | null, signal?: AbortSignal, from = 0): Promise<Response> {
     const id = encodeURIComponent(item.id)
     if (exportMime) {
       return this.request(`${API}/files/${id}/export?mimeType=${encodeURIComponent(exportMime)}`, signal)
     }
-    try {
-      return await this.request(`${API}/files/${id}?alt=media&supportsAllDrives=true`, signal)
-    } catch (e) {
-      // Drive refuses files it flags as malware unless the downloader acknowledges the risk.
-      if (e instanceof DriveError && e.reason === 'cannotDownloadAbusiveFile') {
-        return this.request(`${API}/files/${id}?alt=media&supportsAllDrives=true&acknowledgeAbuse=true`, signal)
-      }
-      throw e
-    }
+    // A start offset resumes a download that dropped partway through.
+    const range: Record<string, string> = from ? { Range: `bytes=${from}-` } : {}
+    // Files Google flags as malware fail with cannotDownloadAbusiveFile; we report them
+    // rather than silently passing acknowledgeAbuse.
+    return this.request(`${API}/files/${id}?alt=media&supportsAllDrives=true`, signal, range)
   }
 }
 
@@ -291,6 +287,7 @@ interface RawFile {
   name: string
   mimeType: string
   size?: string
+  md5Checksum?: string
   modifiedTime?: string
   driveId?: string
   iconLink?: string
@@ -303,6 +300,7 @@ function toItem(f: RawFile): DriveItem {
     name: f.name,
     mimeType: f.mimeType,
     size: f.size !== undefined ? Number(f.size) : undefined,
+    md5: f.md5Checksum,
     modifiedTime: f.modifiedTime,
     driveId: f.driveId,
     iconLink: f.iconLink,

@@ -2,12 +2,14 @@ import { useCallback, useState } from 'react'
 import { Browser } from './components/Browser'
 import { LinkDialog, SettingsDialog } from './components/Dialogs'
 import { Alert, Close, Logo, Plus } from './components/Icons'
+import { ReportDialog } from './components/Report'
 import { Sidebar } from './components/Sidebar'
 import { Starfield } from './components/Starfield'
 import { Transfers } from './components/Transfers'
 import { useAccounts } from './hooks/useAccounts'
 import { useTransfers } from './hooks/useTransfers'
 import { virtualRoots } from './lib/google'
+import { LocalTree } from './lib/localfs'
 import { isFolder } from './lib/paths'
 import { canSaveFile, pickFolder, zipDestination } from './lib/pickers'
 import { loadSettings, saveSettings, type Settings } from './lib/settings'
@@ -24,6 +26,8 @@ export default function App() {
   const xfer = useTransfers(settings)
   const [location, setLocation] = useState<Location | null>(() => (acc.accounts[0] ? { account: acc.accounts[0], root: virtualRoots()[0] } : null))
   const [dialog, setDialog] = useState<'settings' | 'link' | null>(null)
+  const [reportId, setReportId] = useState<string | null>(null)
+  const report = xfer.transfers.find((t) => t.id === reportId)
   const [toast, setToast] = useState<{ text: string; tone?: 'warn' } | null>(null)
 
   const fail = (e: unknown) => setToast({ text: e instanceof Error ? e.message : String(e), tone: 'warn' })
@@ -47,7 +51,16 @@ export default function App() {
   const copy = async (source: DriveSource, items: DriveItem[], label: string) => {
     try {
       const dir = await pickFolder()
-      if (dir) xfer.start('folder', source, items, { kind: 'folder', dir }, label)
+      if (dir) xfer.start('folder', source, items, { kind: 'folder', tree: new LocalTree(dir) }, label)
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  const check = async (source: DriveSource, items: DriveItem[], label: string) => {
+    try {
+      const dir = await pickFolder()
+      if (dir) xfer.start('verify', source, items, { kind: 'verify', dir }, label)
     } catch (e) {
       fail(e)
     }
@@ -147,6 +160,7 @@ export default function App() {
               root={location.root}
               onCopy={copy}
               onZip={zip}
+              onCheck={check}
             />
           ) : (
             <Welcome onConnect={connect} onDemo={demo} onSettings={() => setDialog('settings')} />
@@ -154,7 +168,30 @@ export default function App() {
         </main>
       </div>
 
-      <Transfers transfers={xfer.transfers} onCancel={xfer.cancel} onResume={xfer.resume} onDismiss={xfer.dismiss} />
+      <Transfers
+        transfers={xfer.transfers}
+        onCancel={xfer.cancel}
+        onResume={xfer.resume}
+        onFix={xfer.fix}
+        onRecheck={xfer.recheck}
+        onReport={setReportId}
+        onDismiss={xfer.dismiss}
+      />
+
+      {report && (
+        <ReportDialog
+          transfer={report}
+          onClose={() => setReportId(null)}
+          onFix={() => {
+            xfer.fix(report.id)
+            setReportId(null)
+          }}
+          onRecheck={() => {
+            xfer.recheck(report.id)
+            setReportId(null)
+          }}
+        />
+      )}
 
       {toast && (
         <div className={`toast ${toast.tone ?? ''}`} role="status">
