@@ -9,6 +9,8 @@ export interface DriveItem {
   name: string
   mimeType: string
   size?: number
+  /** Drive's MD5 of the file's bytes. Google Docs-type files have none. */
+  md5?: string
   modifiedTime?: string
   /** Set on items that live in a shared drive. */
   driveId?: string
@@ -50,8 +52,11 @@ export interface DriveSource {
   list(folder: DriveItem, signal?: AbortSignal): Promise<DriveItem[]>
   get(id: string, signal?: AbortSignal): Promise<DriveItem>
   search(text: string, signal?: AbortSignal): Promise<DriveItem[]>
-  /** Opens a byte stream for a binary file, or an export for a Google Docs-type file. */
-  open(item: DriveItem, exportMime: string | null, signal?: AbortSignal): Promise<Response>
+  /**
+   * Opens a byte stream for a binary file, or an export for a Google Docs-type file.
+   * `from` resumes a binary file at that byte; the response must then be 206.
+   */
+  open(item: DriveItem, exportMime: string | null, signal?: AbortSignal, from?: number): Promise<Response>
 }
 
 export type ExportPreference = 'office' | 'pdf'
@@ -66,14 +71,32 @@ export interface PlannedFile {
   size?: number
 }
 
-export interface SkippedFile {
+/**
+ * What happened to one file, as shown in the verification report.
+ * - verified: on disk and its bytes match Google Drive's MD5 checksum
+ * - saved: on disk at the expected size; Drive has no checksum for it (Google Docs exports)
+ * - reused: was already on disk at the right size, so it wasn't downloaded again
+ * - missing / different: found by a check: not on disk, or not the same as in Drive
+ * - failed: could not be downloaded (reason in `detail`)
+ * - later: Google refused it for now (quota lock, busy); retry later
+ * - skipped: Google Drive can't provide this item at all (Forms, Sites, broken shortcuts)
+ * - extra: on disk but not in Drive (informational)
+ */
+export type Outcome = 'verified' | 'saved' | 'reused' | 'missing' | 'different' | 'failed' | 'later' | 'skipped' | 'extra'
+
+export interface ReportEntry {
   path: string
-  reason: string
+  outcome: Outcome
+  detail?: string
+  size?: number
 }
 
-export type TransferMode = 'folder' | 'zip'
+/** Outcomes that need the user's attention, and that "Fix" downloads again. */
+export const PROBLEMS: Outcome[] = ['missing', 'different', 'failed', 'later']
 
-export type TransferState = 'scanning' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled'
+export type TransferMode = 'folder' | 'zip' | 'verify'
+
+export type TransferState = 'scanning' | 'running' | 'verifying' | 'done' | 'failed' | 'cancelled'
 
 export interface TransferProgress {
   id: string
@@ -87,7 +110,10 @@ export interface TransferProgress {
   /** Files that already existed with the same size and were left alone. */
   filesReused: number
   current: string[]
-  skipped: SkippedFile[]
+  /** One entry per file once it is settled, plus skipped and extra items. */
+  report: ReportEntry[]
+  /** Local folder the transfer wrote to or checked, for the report header. */
+  destination?: string
   error?: string
   startedAt: number
   finishedAt?: number

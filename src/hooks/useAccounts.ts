@@ -40,7 +40,7 @@ export function useAccounts(clientId: string) {
       let s = sources.current.get(account.id)
       if (s) return s
       if (account.demo) {
-        s = new DemoSource()
+        s = new DemoSource({ glitches: true })
       } else {
         const renew = () => {
           let p = pendingRenew.current.get(account.id)

@@ -187,3 +187,20 @@ export function FileIcon({ mimeType, ...p }: P & { mimeType: string }) {
     </svg>
   )
 }
+export const ShieldCheck = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z" />
+    <path d="M8.8 12.2l2.2 2.2 4.4-4.6" />
+  </svg>
+)
+export const Wrench = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+  </svg>
+)
+export const FileText = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+    <path d="M14 3v4h4M9 12h6M9 15.5h6M9 19h3.5" />
+  </svg>
+)

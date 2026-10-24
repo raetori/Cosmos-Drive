@@ -4,7 +4,9 @@ Browse every Google Drive you own and copy whole folders to your computer, exact
 
 Inspired by [Cyberduck](https://cyberduck.io/), starting with Google Drive only.
 
-![Cosmos Drive browsing a drive, with a finished copy in the transfers panel](docs/browser.png)
+![Cosmos Drive browsing a drive, with a finished, verified copy in the transfers panel](docs/browser.png)
+
+![The verification report after checking a copy: two files need attention](docs/report.png)
 
 ## What it does
 
@@ -14,10 +16,14 @@ Inspired by [Cyberduck](https://cyberduck.io/), starting with Google Drive only.
 - **Copy to computer:** pick a folder on your disk and Cosmos Drive recreates the Drive folder tree inside it, downloading 1 to 6 files at a time. If you stop or lose connection, press **Resume**. Files already on disk at full size are kept, so it continues where it stopped.
 - **One zip:** streams everything into a single zip file as it downloads. It uses ZIP64, so there's no 2 GB or 4 GB cap, and it never holds the whole thing in memory.
 - **Google Docs, Sheets and Slides** are exported to .docx, .xlsx and .pptx, or PDF if you choose that in Settings. Forms and Sites can't be exported by Google, so they're listed as skipped.
-- **Handles Drive's quirks:** duplicate names in one folder (`Invoice.pdf`, `Invoice (2).pdf`), names that are illegal on Windows or macOS, shortcuts (followed, but a folder is never copied twice), rate limits (waits and retries), dropped connections (retries the file) and expired sign-ins (asks you to sign in again, then carries on).
+- **Every file is checked.** Each download is compared with the MD5 checksum Google Drive keeps for it. A file corrupted on the way is downloaded again automatically, so a broken video can't slip through looking fine.
+- **Cross-check report.** When a copy finishes, Cosmos Drive compares the folder on your computer with Drive and gives you a verdict like "All 1,204 files are on disk and match Drive". The report lists anything that is missing, different, failed, locked by Google ("retry later"), skipped by Google, or extra on disk. **Fix** downloads only those files again, and **Save as CSV** exports the list for a client or your records.
+- **Check a copy** (the shield button): pick any folder already on your computer, even one you unzipped from Drive's own split downloads. Cosmos Drive finds what's missing or broken, and **Fix** fills in only the gaps.
+- **Resumes inside a file.** If the connection drops 30 GB into a 40 GB file, it reconnects and continues from that byte.
+- **Handles Drive's quirks:** duplicate names in one folder (`Invoice.pdf`, `Invoice (2).pdf`), names that are illegal on Windows or macOS, shortcuts (followed, but a folder is never copied twice), rate limits (waits and retries), expired sign-ins (asks you to sign in again, then carries on), Google's 24-hour download lock on popular shared files, files whose owner turned off downloading, Google Docs too large to export, and a full disk (stops cleanly so you can free space and resume). Each problem gets a plain explanation in the report.
 - **No server.** Files go straight from Google to your computer. Sign-in tokens are kept only for the current tab.
 
-There's also a **demo drive**, so you can try everything without a Google account.
+There's also a **demo drive**, so you can try everything without a Google account. It acts out real problems on purpose: one video arrives corrupted, one connection drops partway, and one shared file is locked by Google.
 
 ## Browser support
 
@@ -71,13 +77,18 @@ Any static host works. `npm run build` creates `dist/`, which you can upload to 
 ```
 src/lib/google.ts    Google sign-in (Identity Services) and the Drive API v3 client, with retries
 src/lib/plan.ts      walks the selection and builds a flat list of files and safe paths
-src/lib/transfer.ts  copy-into-folder engine (parallel, resumable) and the streaming zip writer
+src/lib/transfer.ts  copy-into-folder engine (parallel, resumable, checksum-checked) and the streaming zip writer
+src/lib/verify.ts    cross-checks a folder on disk against Drive, and the CSV report
+src/lib/errors.ts    turns Drive and disk errors into plain explanations
+src/lib/localfs.ts   path-based access to the folder you picked
 src/lib/demo.ts      the demo drive
 src/hooks/           accounts, tokens and transfer state for the UI
 src/components/      browser, sidebar, transfers panel, dialogs, starfield
 ```
 
 The brand colours and fonts are CSS variables at the top of `src/index.css`.
+
+See [docs/pain-points.md](docs/pain-points.md) for the problems people report with big Drive downloads, and how Cosmos Drive handles each one.
 
 ## Roadmap toward Cyberduck parity
 

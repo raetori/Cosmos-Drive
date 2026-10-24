@@ -4,13 +4,13 @@ import type { Settings } from '../lib/settings'
 import type { Account } from '../lib/types'
 import { Close } from './Icons'
 
-function Modal({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
+export function Modal({ title, onClose, children, wide }: { title: string; onClose(): void; children: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     if (ref.current && !ref.current.open) ref.current.showModal()
   }, [])
   return (
-    <dialog ref={ref} className="modal" onClose={onClose} onCancel={onClose}>
+    <dialog ref={ref} className={`modal${wide ? ' wide' : ''}`} onClose={onClose} onCancel={onClose}>
       <header>
         <h2>{title}</h2>
         <button className="icon-btn ghost" onClick={onClose} aria-label="Close">

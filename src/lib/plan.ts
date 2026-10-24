@@ -1,13 +1,14 @@
 // Walks a selection of Drive items and turns it into a flat list of files to write.
 
 import { NameAllocator, exportFor, isFolder, isGoogleApp, sanitizeName, withExtension } from './paths'
-import { SHORTCUT_MIME, type DriveItem, type DriveSource, type ExportPreference, type PlannedFile, type SkippedFile } from './types'
+import { SHORTCUT_MIME, type DriveItem, type DriveSource, type ExportPreference, type PlannedFile, type ReportEntry } from './types'
 
 export interface Plan {
   /** Every folder path, parents before children, so empty folders are recreated too. */
   folders: string[]
   files: PlannedFile[]
-  skipped: SkippedFile[]
+  /** Items Google Drive can't provide; reported, never downloaded. */
+  skipped: ReportEntry[]
   /** Sum of known file sizes. Google Docs exports are not included until downloaded. */
   bytes: number
 }
@@ -40,7 +41,7 @@ export async function planTransfer(source: DriveSource, roots: DriveItem[], opts
       }
       // A shortcut can lead back to a folder already in the download, even an ancestor.
       if (visited.has(item.id)) {
-        plan.skipped.push({ path: join(safe), reason: 'Shortcut to a folder that is already in this download; copied once' })
+        plan.skipped.push({ path: join(safe), outcome: 'skipped', detail: 'Shortcut to a folder that is already in this download; copied once' })
         return
       }
       visited.add(item.id)
@@ -50,13 +51,13 @@ export async function planTransfer(source: DriveSource, roots: DriveItem[], opts
       return
     }
     if (item.mimeType === SHORTCUT_MIME) {
-      plan.skipped.push({ path: join(safe), reason: 'Shortcut points to a file that is missing or not shared with you' })
+      plan.skipped.push({ path: join(safe), outcome: 'skipped', detail: 'Shortcut points to a file that is missing or not shared with you' })
       return
     }
     if (isGoogleApp(item.mimeType)) {
       const exp = exportFor(item.mimeType, opts.exportPref)
       if (!exp) {
-        plan.skipped.push({ path: join(safe), reason: 'Google Drive cannot export this type (Forms, Sites, My Maps)' })
+        plan.skipped.push({ path: join(safe), outcome: 'skipped', detail: 'Google Drive cannot export this type (Forms, Sites, My Maps)' })
         return
       }
       const path = join(names.claim(parentPath, withExtension(safe, exp.ext)))
@@ -112,4 +113,11 @@ export async function planTransfer(source: DriveSource, roots: DriveItem[], opts
   plan.folders.sort()
   plan.files.sort((a, b) => a.path.localeCompare(b.path))
   return plan
+}
+
+/** A smaller plan holding only the given paths, for re-downloading what a check flagged. */
+export function subsetPlan(plan: Plan, paths: Set<string>): Plan {
+  const files = plan.files.filter((f) => paths.has(f.path))
+  const folders = plan.folders.filter((d) => files.some((f) => f.path.startsWith(d + '/')))
+  return { folders, files, skipped: [], bytes: files.reduce((n, f) => n + (f.size ?? 0), 0) }
 }

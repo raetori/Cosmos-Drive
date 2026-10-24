@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, 
 import { canPickFolder } from '../lib/pickers'
 import { formatBytes, formatDate, isFolder, kindOf } from '../lib/paths'
 import type { DriveItem, DriveSource } from '../lib/types'
-import { Back, Chevron, CopyDown, FileIcon, Forward, Refresh, Search, Up, Zip } from './Icons'
+import { Back, Chevron, CopyDown, FileIcon, Forward, Refresh, Search, ShieldCheck, Up, Zip } from './Icons'
 
 type SortKey = 'name' | 'size' | 'modifiedTime' | 'kind'
 
@@ -25,6 +25,8 @@ interface Props {
   root: DriveItem
   onCopy(source: DriveSource, items: DriveItem[], label: string): void
   onZip(source: DriveSource, items: DriveItem[], label: string): void
+  /** Compare a folder already on the computer with these Drive items. */
+  onCheck(source: DriveSource, items: DriveItem[], label: string): void
 }
 
 function compare(a: DriveItem, b: DriveItem, key: SortKey, dir: number): number {
@@ -39,7 +41,7 @@ function compare(a: DriveItem, b: DriveItem, key: SortKey, dir: number): number 
   return r * dir
 }
 
-export function Browser({ source, root, onCopy, onZip }: Props) {
+export function Browser({ source, root, onCopy, onZip, onCheck }: Props) {
   const [stack, setStack] = useState<DriveItem[]>([root])
   const [back, setBack] = useState<DriveItem[][]>([])
   const [fwd, setFwd] = useState<DriveItem[][]>([])
@@ -284,6 +286,15 @@ export function Browser({ source, root, onCopy, onZip }: Props) {
           </button>
           <button className="btn" onClick={() => onZip(source, targets, label)} title="Download everything as one zip file">
             <Zip width={17} height={17} /> One zip
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => onCheck(source, targets, label)}
+            disabled={!canPickFolder}
+            title="Check a copy: compare a folder already on your computer with Drive, find what’s missing or broken, and fix it"
+            aria-label="Check a copy on your computer"
+          >
+            <ShieldCheck />
           </button>
         </div>
       </div>
