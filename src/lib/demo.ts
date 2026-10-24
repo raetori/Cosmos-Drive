@@ -88,7 +88,7 @@ const GLITCHES: Record<string, 'corrupt-once' | 'drop-once' | 'quota'> = {
 }
 
 export class DemoSource implements DriveSource {
-  account: Account = { id: 'demo', email: 'demo@cosmos.drive', name: 'Demo account', demo: true }
+  account: Account = { id: 'demo', email: 'demo@cosmodrive.app', name: 'Demo account', demo: true }
   private nodes = new Map<string, { node: Node; item: DriveItem }>()
   private children = new Map<string, string[]>()
   private bytesPerSecond: number

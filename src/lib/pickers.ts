@@ -17,7 +17,7 @@ export const canSaveFile = typeof w.showSaveFilePicker === 'function'
 /** Returns null if the user closed the dialog. */
 export async function pickFolder(): Promise<FileSystemDirectoryHandle | null> {
   try {
-    return await w.showDirectoryPicker!({ id: 'cosmos-drive', mode: 'readwrite' })
+    return await w.showDirectoryPicker!({ id: 'cosmodrive', mode: 'readwrite' })
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') return null
     throw e
@@ -32,7 +32,7 @@ export async function zipDestination(name: string): Promise<WritableStream<Uint8
   if (canSaveFile) {
     try {
       const handle = await w.showSaveFilePicker!({
-        id: 'cosmos-drive-zip',
+        id: 'cosmodrive-zip',
         suggestedName: name,
         types: [{ description: 'Zip archive', accept: { 'application/zip': ['.zip'] } }],
       })

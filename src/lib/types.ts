@@ -3,7 +3,7 @@
 export const FOLDER_MIME = 'application/vnd.google-apps.folder'
 export const SHORTCUT_MIME = 'application/vnd.google-apps.shortcut'
 
-/** A file or folder as Cosmos Drive sees it. Virtual roots use ids like `@my-drive`. */
+/** A file or folder as CosmoDrive sees it. Virtual roots use ids like `@my-drive`. */
 export interface DriveItem {
   id: string
   name: string

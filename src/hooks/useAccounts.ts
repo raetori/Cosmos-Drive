@@ -100,7 +100,7 @@ export function useAccounts(clientId: string) {
   }, [reauth])
 
   const addDemo = useCallback((): Account => {
-    const demo = sourceFor({ id: 'demo', email: 'demo@cosmos.drive', name: 'Demo account', demo: true }).account
+    const demo = sourceFor({ id: 'demo', email: 'demo@cosmodrive.app', name: 'Demo account', demo: true }).account
     setAccounts((prev) => (prev.some((a) => a.demo) ? prev : [demo, ...prev]))
     return demo
   }, [sourceFor])

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Browser } from './components/Browser'
 import { LinkDialog, SettingsDialog } from './components/Dialogs'
-import { Alert, Close } from './components/Icons'
+import { Alert, Close, Logo } from './components/Icons'
 import { ReportDialog } from './components/Report'
 import { Sidebar } from './components/Sidebar'
 import { Starfield } from './components/Starfield'
@@ -100,7 +100,8 @@ export default function App() {
       <Starfield />
       <header className="topbar">
         <div className="brand">
-          <span className="wordmark">Cosmos Drive</span>
+          <Logo className="logo" />
+          <span className="wordmark">CosmoDrive</span>
         </div>
         {location && (
           <div className="where">
@@ -220,7 +221,7 @@ function Welcome({ onConnect, onDemo, onSettings }: { onConnect(): void; onDemo(
   return (
     <section className="welcome">
       <p className="eyebrow">Creation of Cosmos</p>
-      <h1 className="title-card">Cosmos Drive</h1>
+      <h1 className="title-card">CosmoDrive</h1>
       <h2 className="headline">Your whole Drive. One move.</h2>
       <p className="lede">
         Link every Google account you have, and we copy any folder to your computer exactly as it is in Drive. No 2&nbsp;GB splits, no

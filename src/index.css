@@ -1,4 +1,4 @@
-/* Cosmos Drive. Brand tokens live here; swap them to retune the whole app. */
+/* CosmoDrive. Brand tokens live here; swap them to retune the whole app. */
 :root {
   /* Matched to creationofcosmos.com: black space, warm starlight, an ember
      accent for labels and cream pills for the main action. */
@@ -146,6 +146,11 @@ code {
 }
 
 /* The same wordmark as the site's top-left: a tight grotesk, no logo. */
+.logo {
+  color: var(--cream);
+  filter: drop-shadow(0 0 10px rgba(255, 210, 160, 0.25));
+}
+
 .wordmark {
   font: 500 19px var(--font-display);
   letter-spacing: 0.005em;

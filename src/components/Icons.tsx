@@ -16,6 +16,14 @@ const base = (props: P) => ({
   ...props,
 })
 
+/** The CosmoDrive mark: a C closing round a singularity. */
+export const Logo = (p: P) => (
+  <svg {...base({ width: 22, height: 22, ...p })} viewBox="0 0 100 100" stroke="none" fill="currentColor">
+    <path d="M82.70,79.44A44,44 0 1 1 82.70,20.56L71.55,30.60A29,29 0 1 0 71.55,69.40Z" />
+    <circle cx="80" cy="50" r="9.5" />
+  </svg>
+)
+
 export const Chevron = (p: P) => (
   <svg {...base(p)}>
     <path d="M9 6l6 6-6 6" />
