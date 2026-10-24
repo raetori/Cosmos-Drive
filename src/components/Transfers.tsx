@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { TransferView } from '../hooks/useTransfers'
 import { formatBytes, formatDuration } from '../lib/paths'
 import { Alert, Check, Chevron, Close, CopyDown, FileText, Play, ShieldCheck, Wrench, Zip } from './Icons'
+import { Orbit } from './Orbit'
 
 interface Props {
   transfers: TransferView[]
@@ -69,7 +70,15 @@ function TransferCard({ t, ...on }: { t: TransferView } & Omit<Props, 'transfers
     <article className={`transfer ${t.state}${t.problems && !active ? ' has-problems' : ''}`}>
       <div className="transfer-head">
         <span className="transfer-icon">
-          {t.state === 'done' && !t.problems ? <Check width={16} height={16} /> : t.state === 'failed' || t.problems ? <Alert width={16} height={16} /> : <ModeIcon width={16} height={16} />}
+          {active ? (
+            <Orbit size={20} progress={indeterminate ? undefined : pct / 100} />
+          ) : t.state === 'done' && !t.problems ? (
+            <Check width={16} height={16} />
+          ) : t.state === 'failed' || t.problems ? (
+            <Alert width={16} height={16} />
+          ) : (
+            <ModeIcon width={16} height={16} />
+          )}
         </span>
         <div className="transfer-title">
           <strong title={title}>{title}</strong>

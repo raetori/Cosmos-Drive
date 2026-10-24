@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { Browser } from './components/Browser'
 import { LinkDialog, SettingsDialog } from './components/Dialogs'
-import { Alert, Close, Logo, Plus } from './components/Icons'
+import { Alert, Close } from './components/Icons'
 import { ReportDialog } from './components/Report'
 import { Sidebar } from './components/Sidebar'
 import { Starfield } from './components/Starfield'
@@ -100,10 +100,7 @@ export default function App() {
       <Starfield />
       <header className="topbar">
         <div className="brand">
-          <Logo />
-          <span className="wordmark">
-            COSMOS <em>DRIVE</em>
-          </span>
+          <span className="wordmark">Cosmos Drive</span>
         </div>
         {location && (
           <div className="where">
@@ -112,8 +109,8 @@ export default function App() {
           </div>
         )}
         <div className="topbar-right">
-          <button className="btn ghost" onClick={connect}>
-            <Plus width={16} height={16} /> Connect account
+          <button className="nav-star" onClick={connect}>
+            <span>Connect account</span>
           </button>
         </div>
       </header>
@@ -222,43 +219,42 @@ export default function App() {
 function Welcome({ onConnect, onDemo, onSettings }: { onConnect(): void; onDemo(): void; onSettings(): void }) {
   return (
     <section className="welcome">
-      <p className="eyebrow">Google Drive, without the zip mess</p>
-      <h1>
-        Your whole Drive.
-        <br />
-        <span className="glow">One move.</span>
-      </h1>
+      <p className="eyebrow">Creation of Cosmos</p>
+      <h1 className="title-card">Cosmos Drive</h1>
+      <h2 className="headline">Your whole Drive. One move.</h2>
       <p className="lede">
-        Browse every Google account you own, then copy any folder to your computer exactly as it is in Drive. No 2&nbsp;GB splits, no
-        twenty zips to merge, no missing files.
+        Link every Google account you have, and we copy any folder to your computer exactly as it is in Drive. No 2&nbsp;GB splits, no
+        twenty zips to merge, and we check every file when it lands.
       </p>
       <div className="welcome-actions">
         <button className="btn primary large" onClick={onConnect}>
-          <Plus width={18} height={18} /> Connect Google Drive
+          Connect Google Drive <span className="arrow">→</span>
         </button>
         <button className="btn large" onClick={onDemo}>
           Explore the demo
         </button>
       </div>
-      <ul className="features">
+      <ol className="features">
         <li>
-          <strong>Copy to computer</strong>
-          <span>Recreates the folder tree on your disk. Stop anytime and resume later: finished files are kept.</span>
+          <span className="eyebrow">01 · Copy</span>
+          <strong>The folder, as it is</strong>
+          <span>We rebuild the folder tree on your disk. Stop anytime and resume later; finished files stay put.</span>
         </li>
         <li>
+          <span className="eyebrow">02 · Zip</span>
           <strong>One zip, any size</strong>
           <span>Everything streams into a single zip as it downloads, well past 4&nbsp;GB.</span>
         </li>
         <li>
-          <strong>Every account, every drive</strong>
-          <span>My Drive, shared drives, shared with me, and any folder link.</span>
+          <span className="eyebrow">03 · Check</span>
+          <strong>Nothing goes missing</strong>
+          <span>We match every file against Drive&rsquo;s checksum and tell you exactly what&rsquo;s missing or broken.</span>
         </li>
-      </ul>
+      </ol>
       <button className="link-btn small" onClick={onSettings}>
         Setup: Google client ID and download options
       </button>
-      <p className="fine">Files go straight from Google to your computer. Cosmos Drive has no server and never sees them.</p>
+      <p className="fine">Files go straight from Google to your computer. We have no server and never see them.</p>
     </section>
   )
 }
-

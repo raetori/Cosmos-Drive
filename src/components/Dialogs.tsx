@@ -57,7 +57,7 @@ export function SettingsDialog({ settings, onSave, onClose }: { settings: Settin
         <label>
           <span>Files downloaded at the same time: {draft.concurrency}</span>
           <input type="range" min={1} max={6} value={draft.concurrency} onChange={(e) => setDraft({ ...draft, concurrency: Number(e.target.value) })} />
-          <small>Higher is faster on a good connection. Google may slow down very busy accounts; Cosmos Drive waits and retries when it does.</small>
+          <small>Higher is faster on a good connection. Google may slow down very busy accounts; we wait and retry when it does.</small>
         </label>
         <footer>
           <button type="button" className="btn" onClick={onClose}>

@@ -16,21 +16,6 @@ const base = (props: P) => ({
   ...props,
 })
 
-export const Logo = (p: P) => (
-  <svg {...base({ width: 28, height: 28, ...p })} viewBox="0 0 32 32" strokeWidth={1.4}>
-    <defs>
-      <radialGradient id="cosmos-core" cx="40%" cy="35%" r="70%">
-        <stop offset="0" stopColor="#fff6dc" />
-        <stop offset=".45" stopColor="var(--accent-2)" />
-        <stop offset="1" stopColor="var(--accent)" />
-      </radialGradient>
-    </defs>
-    <circle cx="16" cy="16" r="6.2" fill="url(#cosmos-core)" stroke="none" />
-    <ellipse cx="16" cy="16" rx="14" ry="5.2" transform="rotate(-24 16 16)" stroke="var(--text)" opacity=".75" />
-    <circle cx="28.2" cy="10.6" r="1.4" fill="var(--text)" stroke="none" />
-  </svg>
-)
-
 export const Chevron = (p: P) => (
   <svg {...base(p)}>
     <path d="M9 6l6 6-6 6" />

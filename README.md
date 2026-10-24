@@ -4,7 +4,9 @@ Browse every Google Drive you own and copy whole folders to your computer, exact
 
 Inspired by [Cyberduck](https://cyberduck.io/), starting with Google Drive only.
 
-![Cosmos Drive browsing a drive, with a finished, verified copy in the transfers panel](docs/browser.png)
+![The welcome screen](docs/welcome.png)
+
+![Cosmos Drive browsing a drive while a folder copies](docs/browser.png)
 
 ![The verification report after checking a copy: two files need attention](docs/report.png)
 
@@ -86,7 +88,7 @@ src/hooks/           accounts, tokens and transfer state for the UI
 src/components/      browser, sidebar, transfers panel, dialogs, starfield
 ```
 
-The brand colours and fonts are CSS variables at the top of `src/index.css`.
+The look matches [creationofcosmos.com](https://www.creationofcosmos.com): the same fonts (Inter Tight, Geist, Geist Mono), warm starlight on black, ember mono labels, cream pill buttons, smoked-glass panels and eased motion. The orb-on-ring (`src/components/Orbit.tsx`) is the "working on it" motif, never a logo. Colours and fonts are CSS variables at the top of `src/index.css`, so the final brand palette and logo can drop in there.
 
 See [docs/pain-points.md](docs/pain-points.md) for the problems people report with big Drive downloads, and how Cosmos Drive handles each one.
 

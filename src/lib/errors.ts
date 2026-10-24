@@ -37,7 +37,7 @@ export function explain(e: unknown): Explained {
   }
   if (e instanceof DOMException) {
     if (e.name === 'QuotaExceededError') return { message: 'Your disk is full. Free up space, then press Resume.', fatal: true }
-    if (e.name === 'NotAllowedError') return { message: 'Cosmos Drive lost permission to write to that folder. Press Resume and allow access again.', fatal: true }
+    if (e.name === 'NotAllowedError') return { message: 'We lost permission to write to that folder. Press Resume and allow access again.', fatal: true }
     if (e.name === 'NotFoundError') return { message: 'The destination folder was moved or deleted.', fatal: true }
   }
   if (e instanceof ChecksumError || e instanceof FolderNameError) return { message: e.message }
