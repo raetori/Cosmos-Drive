@@ -91,7 +91,7 @@ export async function requestToken(clientId: string, loginHint?: string): Promis
         }
         resolve({ accessToken: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 })
       },
-      error_callback: (e) => reject(new Error(e.type === 'popup_closed' ? 'Sign-in window was closed' : e.message || e.type)),
+      error_callback: (e) => reject(new Error(e.type === 'popup_closed' ? 'Sign-in was closed. If Google said "Access blocked", that account isn’t on CosmoDrive’s test-user list yet.' : e.message || e.type)),
     })
     client.requestAccessToken(loginHint ? { prompt: '', login_hint: loginHint } : { prompt: 'select_account' })
   })
