@@ -3,6 +3,7 @@ import { Browser } from './components/Browser'
 import { LinkDialog, SettingsDialog } from './components/Dialogs'
 import { Alert, Close, Logo } from './components/Icons'
 import { ReportDialog } from './components/Report'
+import { FolderTargetDialog, type FolderPurpose } from './components/FolderTarget'
 import { RequestAccessDialog, SignInSafety } from './components/RequestAccess'
 import { Sidebar } from './components/Sidebar'
 import { Starfield } from './components/Starfield'
@@ -13,7 +14,7 @@ import { canRequestAccess } from './lib/access'
 import { SignInClosed, virtualRoots } from './lib/google'
 import { LocalTree } from './lib/localfs'
 import { isFolder } from './lib/paths'
-import { canSaveFile, pickFolder, zipDestination } from './lib/pickers'
+import { allowWrite, canSaveFile, zipDestination } from './lib/pickers'
 import { loadSettings, saveSettings, type Settings } from './lib/settings'
 import type { Account, DriveItem, DriveSource } from './lib/types'
 
@@ -28,6 +29,13 @@ export default function App() {
   const xfer = useTransfers(settings)
   const [location, setLocation] = useState<Location | null>(() => (acc.accounts[0] ? { account: acc.accounts[0], root: virtualRoots()[0] } : null))
   const [dialog, setDialog] = useState<'settings' | 'link' | 'access' | 'blocked' | null>(null)
+  const [target, setTarget] = useState<{
+    purpose: FolderPurpose
+    source: DriveSource
+    items: DriveItem[]
+    label: string
+    pending?: FileSystemDirectoryHandle
+  } | null>(null)
   const [reportId, setReportId] = useState<string | null>(null)
   const report = xfer.transfers.find((t) => t.id === reportId)
   const [toast, setToast] = useState<{ text: string; tone?: 'warn'; action?: { label: string; run(): void } } | null>(null)
@@ -51,22 +59,24 @@ export default function App() {
 
   const demo = () => setLocation({ account: acc.addDemo(), root: virtualRoots()[0] })
 
-  const copy = async (source: DriveSource, items: DriveItem[], label: string) => {
-    try {
-      const dir = await pickFolder()
-      if (dir) xfer.start('folder', source, items, { kind: 'folder', tree: new LocalTree(dir) }, label)
-    } catch (e) {
-      fail(e)
-    }
+  const copy = (source: DriveSource, items: DriveItem[], label: string) => setTarget({ purpose: 'copy', source, items, label })
+  const check = (source: DriveSource, items: DriveItem[], label: string) => setTarget({ purpose: 'check', source, items, label })
+
+  const startInto = (t: NonNullable<typeof target>, dir: FileSystemDirectoryHandle) => {
+    setTarget(null)
+    if (t.purpose === 'copy') xfer.start('folder', t.source, t.items, { kind: 'folder', tree: new LocalTree(dir) }, t.label)
+    else xfer.start('verify', t.source, t.items, { kind: 'verify', dir }, t.label)
   }
 
-  const check = async (source: DriveSource, items: DriveItem[], label: string) => {
+  /** A folder dropped straight on the browser: copy into it, or ask for the click Chrome needs first. */
+  const dropInto = async (source: DriveSource, items: DriveItem[], label: string, dir: FileSystemDirectoryHandle) => {
+    const t = { purpose: 'copy' as const, source, items, label }
     try {
-      const dir = await pickFolder()
-      if (dir) xfer.start('verify', source, items, { kind: 'verify', dir }, label)
-    } catch (e) {
-      fail(e)
+      if (await allowWrite(dir)) return startInto(t, dir)
+    } catch {
+      // No recent click: the dialog's Allow button supplies one.
     }
+    setTarget({ ...t, pending: dir })
   }
 
   const zip = async (source: DriveSource, items: DriveItem[], label: string) => {
@@ -162,6 +172,8 @@ export default function App() {
               onCopy={copy}
               onZip={zip}
               onCheck={check}
+              onDropFolder={(source, items, label, dir) => void dropInto(source, items, label, dir)}
+              onDropError={(text) => setToast({ text, tone: 'warn' })}
             />
           ) : (
             <Welcome onConnect={connect} onDemo={demo} onSettings={() => setDialog('settings')} onRequest={() => setDialog('access')} />
@@ -224,6 +236,15 @@ export default function App() {
             setDialog(null)
             setToast(null)
           }}
+        />
+      )}
+      {target && (
+        <FolderTargetDialog
+          purpose={target.purpose}
+          label={target.label}
+          pending={target.pending}
+          onChosen={(dir) => startInto(target, dir)}
+          onClose={() => setTarget(null)}
         />
       )}
       {dialog === 'access' && <RequestAccessDialog onClose={() => setDialog(null)} />}

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { canPickFolder } from '../lib/pickers'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import { canDropFolder, canPickFolder, draggingFiles, droppedFolder } from '../lib/pickers'
 import { formatBytes, formatDate, isFolder, kindOf } from '../lib/paths'
 import type { DriveItem, DriveSource } from '../lib/types'
 import { Back, Chevron, CopyDown, FileIcon, Forward, Refresh, Search, ShieldCheck, Up, Zip } from './Icons'
@@ -27,6 +27,9 @@ interface Props {
   onZip(source: DriveSource, items: DriveItem[], label: string): void
   /** Compare a folder already on the computer with these Drive items. */
   onCheck(source: DriveSource, items: DriveItem[], label: string): void
+  /** A folder dragged in from Finder or File Explorer: copy these items into it. */
+  onDropFolder(source: DriveSource, items: DriveItem[], label: string, dir: FileSystemDirectoryHandle): void
+  onDropError(message: string): void
 }
 
 function compare(a: DriveItem, b: DriveItem, key: SortKey, dir: number): number {
@@ -41,7 +44,7 @@ function compare(a: DriveItem, b: DriveItem, key: SortKey, dir: number): number 
   return r * dir
 }
 
-export function Browser({ source, root, onCopy, onZip, onCheck }: Props) {
+export function Browser({ source, root, onCopy, onZip, onCheck, onDropFolder, onDropError }: Props) {
   const [stack, setStack] = useState<DriveItem[]>([root])
   const [back, setBack] = useState<DriveItem[][]>([])
   const [fwd, setFwd] = useState<DriveItem[][]>([])
@@ -53,6 +56,8 @@ export function Browser({ source, root, onCopy, onZip, onCheck }: Props) {
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState<Listing | null>(null)
   const tableRef = useRef<HTMLDivElement>(null)
+  const [dropping, setDropping] = useState(false)
+  const dragDepth = useRef(0)
   const loadingRef = useRef(new Set<string>())
 
   const folder = stack[stack.length - 1]
@@ -224,8 +229,43 @@ export function Browser({ source, root, onCopy, onZip, onCheck }: Props) {
     </button>
   )
 
+  const dropHandlers = canDropFolder && {
+    onDragEnter: (e: DragEvent) => {
+      if (!draggingFiles(e.dataTransfer)) return
+      dragDepth.current++
+      setDropping(true)
+    },
+    onDragLeave: () => {
+      if (--dragDepth.current <= 0) setDropping(false)
+    },
+    onDragOver: (e: DragEvent) => {
+      if (!draggingFiles(e.dataTransfer)) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+    },
+    onDrop: (e: DragEvent) => {
+      e.preventDefault()
+      dragDepth.current = 0
+      setDropping(false)
+      droppedFolder(e.dataTransfer).then(
+        (dir) => {
+          if (dir === 'file') onDropError('That’s a file. Drag a folder from your computer to copy into it.')
+          else if (dir) onDropFolder(source, targets, label, dir)
+        },
+        () => onDropError('Chrome won’t let websites use that folder. Make a new folder inside it and drag that in instead.'),
+      )
+    },
+  }
+
   return (
-    <div className="browser">
+    <div className="browser" {...dropHandlers}>
+      {dropping && (
+        <div className="drop-overlay" aria-hidden>
+          <CopyDown width={30} height={30} />
+          <strong>Drop a folder to copy “{label}” into it</strong>
+          <span>Files keep their Drive folder structure inside it.</span>
+        </div>
+      )}
       <div className="toolbar">
         <div className="nav-buttons">
           <button className="icon-btn" title="Back" onClick={goBack} disabled={!back.length}>
@@ -376,7 +416,8 @@ export function Browser({ source, root, onCopy, onZip, onCheck }: Props) {
             </>
           )}
         </span>
-        <span className="muted">{selectedItems.length ? 'Copy or zip the selection' : `Nothing selected: Copy or zip takes all of “${folder.name}”`}</span>
+        <span className="muted">{selectedItems.length ? 'Copy or zip the selection' : `Nothing selected: Copy or zip takes all of “${folder.name}”`}
+          {canDropFolder && ' · or drag a folder from your computer here'}</span>
       </div>
     </div>
   )
