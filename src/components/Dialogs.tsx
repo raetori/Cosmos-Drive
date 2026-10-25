@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { parseDriveLink, parseResourceKey } from '../lib/paths'
-import { BUILT_IN_CLIENT_ID, type Settings } from '../lib/settings'
+import type { Settings } from '../lib/settings'
 import type { Account } from '../lib/types'
 import { Close } from './Icons'
 
@@ -24,31 +24,15 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
 
 export function SettingsDialog({ settings, onSave, onClose }: { settings: Settings; onSave(s: Settings): void; onClose(): void }) {
   const [draft, setDraft] = useState(settings)
-  const origin = window.location.origin
   return (
     <Modal title="Settings" onClose={onClose}>
       <form
         className="form"
         onSubmit={(e) => {
           e.preventDefault()
-          onSave({ ...draft, clientId: draft.clientId.trim() })
+          onSave(draft)
         }}
       >
-        {!BUILT_IN_CLIENT_ID && (
-          <label>
-            <span>Google client ID</span>
-            <input
-              value={draft.clientId}
-              onChange={(e) => setDraft({ ...draft, clientId: e.target.value })}
-              placeholder="….apps.googleusercontent.com"
-              spellCheck={false}
-            />
-            <small>
-              This build has no client ID of its own. Create one in your Google Cloud project (type “Web
-              application”, with <code>{origin}</code> as an authorized JavaScript origin).
-            </small>
-          </label>
-        )}
         <label>
           <span>Google Docs, Sheets and Slides download as</span>
           <select value={draft.exportPref} onChange={(e) => setDraft({ ...draft, exportPref: e.target.value as Settings['exportPref'] })}>

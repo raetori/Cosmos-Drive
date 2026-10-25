@@ -44,8 +44,8 @@ export default function App() {
 
   const connect = useCallback(async () => {
     if (!settings.clientId) {
-      setToast({ text: 'Add your Google OAuth client ID first. The README walks through getting one.' })
-      setDialog('settings')
+      // Only a developer build without VITE_GOOGLE_CLIENT_ID in .env gets here.
+      setToast({ text: 'This build has no Google client ID. Set VITE_GOOGLE_CLIENT_ID in .env (see the README).', tone: 'warn' })
       return
     }
     try {
