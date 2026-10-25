@@ -1,9 +1,14 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ACCESS_EMAIL as EMAIL, ACCESS_ENDPOINT as ENDPOINT, AUDIENCE_PAGE } from '../lib/access'
 import { Modal } from './Dialogs'
+import { Check, ShieldCheck } from './Icons'
 
-/** While Google keeps CosmoDrive in testing, people ask to join the beta here and we add them as test users. */
-export function RequestAccessDialog({ onClose }: { onClose(): void }) {
+/**
+ * While Google keeps CosmoDrive in testing, people ask to join the beta here and we add them as test users.
+ * `onRetry` is set when it opens after a sign-in popup closed: Google never says whether the account was blocked or the
+ * window was just closed, so the copy covers both.
+ */
+export function RequestAccessDialog({ onClose, onRetry }: { onClose(): void; onRetry?(): void }) {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [note, setNote] = useState('')
@@ -54,7 +59,7 @@ export function RequestAccessDialog({ onClose }: { onClose(): void }) {
     )
 
   return (
-    <Modal title="Request access" onClose={onClose}>
+    <Modal title={onRetry ? 'Didn’t get in?' : 'Request access'} onClose={onClose}>
       <form
         className="form"
         onSubmit={(e) => {
@@ -63,8 +68,8 @@ export function RequestAccessDialog({ onClose }: { onClose(): void }) {
         }}
       >
         <small>
-          CosmoDrive is in a private beta while Google reviews it, so Google only lets in the accounts we&rsquo;ve added. Send us yours and
-          we&rsquo;ll add it.
+          CosmoDrive is in a private beta, so Google only lets in accounts we&rsquo;ve added. Send us your Google account and we&rsquo;ll add
+          it.
         </small>
         <label>
           <span>Your Google account</span>
@@ -79,15 +84,65 @@ export function RequestAccessDialog({ onClose }: { onClose(): void }) {
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Client footage, archives, backups…" />
         </label>
         {error && <p className="form-error">{error}</p>}
+        <SignInSafety />
         <footer>
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
+          {onRetry ? (
+            <button type="button" className="btn" onClick={onRetry}>
+              Try signing in again
+            </button>
+          ) : (
+            <button type="button" className="btn" onClick={onClose}>
+              Cancel
+            </button>
+          )}
           <button type="submit" className="btn primary" disabled={state === 'sending' || !email.trim()}>
             {state === 'sending' ? 'Sending…' : 'Send request'}
           </button>
         </footer>
       </form>
     </Modal>
+  )
+}
+
+/** What we can and can't do with a Google account. Keep every line literally true: no "verified" or "by Google" claims. */
+export function SignInSafety({ wide, children }: { wide?: boolean; children?: ReactNode }) {
+  return (
+    <aside className={`trust${wide ? ' wide' : ''}`}>
+      <header>
+        <ShieldCheck width={16} height={16} />
+        <span className="eyebrow">Your account stays yours</span>
+      </header>
+      <ul>
+        <li>
+          <Check width={14} height={14} />
+          <span>
+            <strong>Google&rsquo;s own sign-in page.</strong> We never see or store your password.
+          </span>
+        </li>
+        <li>
+          <Check width={14} height={14} />
+          <span>
+            <strong>Read-only.</strong> We can see and download your files, never change or delete them.
+          </span>
+        </li>
+        <li>
+          <Check width={14} height={14} />
+          <span>
+            <strong>No middleman.</strong> Files go straight from Google to your computer. We have no server.
+          </span>
+        </li>
+        <li>
+          <Check width={14} height={14} />
+          <span>
+            <strong>Yours to end.</strong> Remove our access anytime at{' '}
+            <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer">
+              myaccount.google.com/permissions
+            </a>
+            .
+          </span>
+        </li>
+      </ul>
+      {children}
+    </aside>
   )
 }

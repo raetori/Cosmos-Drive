@@ -3,7 +3,7 @@ import { Browser } from './components/Browser'
 import { LinkDialog, SettingsDialog } from './components/Dialogs'
 import { Alert, Close, Logo } from './components/Icons'
 import { ReportDialog } from './components/Report'
-import { RequestAccessDialog } from './components/RequestAccess'
+import { RequestAccessDialog, SignInSafety } from './components/RequestAccess'
 import { Sidebar } from './components/Sidebar'
 import { Starfield } from './components/Starfield'
 import { Transfers } from './components/Transfers'
@@ -27,7 +27,7 @@ export default function App() {
   const acc = useAccounts(settings.clientId)
   const xfer = useTransfers(settings)
   const [location, setLocation] = useState<Location | null>(() => (acc.accounts[0] ? { account: acc.accounts[0], root: virtualRoots()[0] } : null))
-  const [dialog, setDialog] = useState<'settings' | 'link' | 'access' | null>(null)
+  const [dialog, setDialog] = useState<'settings' | 'link' | 'access' | 'blocked' | null>(null)
   const [reportId, setReportId] = useState<string | null>(null)
   const report = xfer.transfers.find((t) => t.id === reportId)
   const [toast, setToast] = useState<{ text: string; tone?: 'warn'; action?: { label: string; run(): void } } | null>(null)
@@ -44,8 +44,7 @@ export default function App() {
       const account = await acc.connect()
       setLocation({ account, root: virtualRoots()[0] })
     } catch (e) {
-      if (e instanceof SignInClosed && canRequestAccess)
-        setToast({ text: e.message, action: { label: 'Request access', run: () => setDialog('access') } })
+      if (e instanceof SignInClosed && canRequestAccess) setDialog('blocked')
       else fail(e)
     }
   }, [acc, settings.clientId])
@@ -228,6 +227,16 @@ export default function App() {
         />
       )}
       {dialog === 'access' && <RequestAccessDialog onClose={() => setDialog(null)} />}
+      {dialog === 'blocked' && (
+        <RequestAccessDialog
+          onClose={() => setDialog(null)}
+          onRetry={() => {
+            // Straight from the click, so Chrome lets Google's popup open.
+            setDialog(null)
+            void connect()
+          }}
+        />
+      )}
       {dialog === 'link' && <LinkDialog accounts={acc.accounts} onOpen={openLink} onClose={() => setDialog(null)} />}
     </div>
   )
@@ -251,6 +260,17 @@ function Welcome({ onConnect, onDemo, onSettings, onRequest }: { onConnect(): vo
           Explore the demo
         </button>
       </div>
+      {canRequestAccess && (
+        <div className="beta-card">
+          <span className="eyebrow">Private beta</span>
+          <p>
+            <strong>New here? Request access first.</strong> We add your Google account to the beta by hand, then you sign in with it.
+          </p>
+          <button className="btn" onClick={onRequest}>
+            Request access <span className="arrow">→</span>
+          </button>
+        </div>
+      )}
       <ol className="features">
         <li>
           <span className="eyebrow">01 · Copy</span>
@@ -268,16 +288,15 @@ function Welcome({ onConnect, onDemo, onSettings, onRequest }: { onConnect(): vo
           <span>We match every file against Drive&rsquo;s checksum and tell you exactly what&rsquo;s missing or broken.</span>
         </li>
       </ol>
-      <p className="small beta">
+      <SignInSafety wide>
         {canRequestAccess && (
-          <>
-            We&rsquo;re in a private beta.{' '}
-            <button className="link-btn" onClick={onRequest}>
-              Request access
-            </button>
-            {' · '}
-          </>
+          <p className="trust-note">
+            While we&rsquo;re in beta, Google shows &ldquo;Google hasn&rsquo;t verified this app&rdquo; at sign-in. That&rsquo;s expected: click
+            Continue.
+          </p>
         )}
+      </SignInSafety>
+      <p className="small beta">
         <button className="link-btn" onClick={onSettings}>
           Download options
         </button>

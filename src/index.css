@@ -888,6 +888,128 @@ code {
   line-height: 1.5;
 }
 
+/* Private beta: the first step for anyone new, so it sits right under the main actions. */
+.beta-card {
+  margin-top: 26px;
+  width: 100%;
+  max-width: 560px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-tint), var(--panel);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 220, 0.12);
+  backdrop-filter: blur(14px);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 18px;
+  text-align: left;
+}
+
+.beta-card .eyebrow {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 10px;
+}
+
+.beta-card p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.beta-card strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* The sign-in safety note (welcome screen and Request access dialog): what we can and can't do with an account. */
+.trust {
+  padding: 14px 16px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-tint), var(--panel);
+  box-shadow: inset 0 1px 0 rgba(255, 240, 220, 0.12);
+  backdrop-filter: blur(14px);
+  text-align: left;
+}
+
+.modal .trust header,
+.trust header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0;
+  color: var(--accent-2);
+}
+
+.trust header .eyebrow {
+  margin: 0;
+  font-size: 10px;
+}
+
+.trust ul {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+}
+
+.trust li {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.trust li svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--ok);
+}
+
+.trust li strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.trust a {
+  color: var(--accent-2);
+  text-underline-offset: 3px;
+}
+
+/* On the welcome screen it spans the page, two points to a row. */
+.trust.wide {
+  width: 100%;
+  margin: 0 0 22px;
+  padding: 18px 22px 20px;
+}
+
+.trust.wide ul {
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 26px;
+}
+
+.trust-note {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+@media (max-width: 640px) {
+  .beta-card,
+  .trust.wide ul {
+    grid-template-columns: 1fr;
+  }
+}
+
 .fine {
   margin-top: 10px;
   font-size: 12px;
