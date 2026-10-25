@@ -122,13 +122,15 @@ export function SignInSafety({ wide, children }: { wide?: boolean; children?: Re
         <li>
           <Check width={14} height={14} />
           <span>
-            <strong>Read-only.</strong> We can see and download your files, never change or delete them.
+            <strong>Your files stay private.</strong> Nobody at CosmoDrive can see them. We have no server, so they go straight from Google
+            to your computer.
           </span>
         </li>
         <li>
           <Check width={14} height={14} />
           <span>
-            <strong>No middleman.</strong> Files go straight from Google to your computer. We have no server.
+            <strong>Copy only.</strong> The app can copy your files to your computer, but it can&rsquo;t change or delete anything in your
+            Drive.
           </span>
         </li>
         <li>
