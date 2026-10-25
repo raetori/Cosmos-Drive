@@ -983,6 +983,105 @@ code {
   line-height: 1.5;
 }
 
+a.eyebrow-link {
+  text-decoration: none;
+  transition: color 0.3s var(--ease), text-shadow 0.3s var(--ease);
+}
+
+a.eyebrow-link:hover {
+  color: var(--accent-2);
+  text-shadow: 0 0 18px rgba(255, 138, 61, 0.5);
+}
+
+/* Private beta: one quiet line under the main actions. */
+.welcome-note {
+  margin: 18px 0 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.welcome-note .eyebrow {
+  margin: 0 8px 0 0;
+  font-size: 10px;
+}
+
+/* The sign-in details stay one click away so the page reads as hero, actions, features. */
+.before-signin {
+  width: 100%;
+  margin: 0 0 22px;
+  border-radius: 18px;
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-tint), var(--panel);
+  backdrop-filter: blur(14px);
+  text-align: left;
+}
+
+.before-signin summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.before-signin summary::-webkit-details-marker {
+  display: none;
+}
+
+.before-signin summary::after {
+  content: '+';
+  margin-left: auto;
+  color: var(--accent-2);
+  transition: transform 0.3s var(--ease);
+}
+
+.before-signin[open] summary::after {
+  transform: rotate(45deg);
+}
+
+.before-signin summary .eyebrow {
+  margin: 0;
+  font-size: 10px;
+}
+
+.before-signin .heads-up {
+  margin: 0;
+  padding: 0 20px 14px;
+  text-align: left;
+}
+
+.before-signin .trust.wide {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--glass-edge);
+  border-radius: 0 0 18px 18px;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.welcome-foot {
+  margin: 0;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.welcome-foot a {
+  color: var(--muted);
+  text-underline-offset: 3px;
+}
+
+.welcome-foot a:hover {
+  color: var(--accent-2);
+}
+
 /* Private beta: the first step for anyone new, so it sits right under the main actions. */
 .beta-card {
   margin-top: 26px;

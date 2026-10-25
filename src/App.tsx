@@ -18,6 +18,8 @@ import { allowWrite, canSaveFile, zipDestination } from './lib/pickers'
 import { loadSettings, saveSettings, type Settings } from './lib/settings'
 import type { Account, DriveItem, DriveSource } from './lib/types'
 
+const SITE = 'https://creationofcosmos.com'
+
 interface Location {
   account: Account
   root: DriveItem
@@ -278,7 +280,9 @@ export default function App() {
 function Welcome({ onConnect, onDemo, onSettings, onRequest }: { onConnect(): void; onDemo(): void; onSettings(): void; onRequest(): void }) {
   return (
     <section className="welcome">
-      <p className="eyebrow">Creation of Cosmos</p>
+      <a className="eyebrow eyebrow-link" href={SITE} target="_blank" rel="noreferrer">
+        Creation of Cosmos
+      </a>
       <h1 className="title-card">CosmoDrive</h1>
       <h2 className="headline">Your whole Drive. One move.</h2>
       <p className="lede">
@@ -293,21 +297,14 @@ function Welcome({ onConnect, onDemo, onSettings, onRequest }: { onConnect(): vo
           Explore the demo
         </button>
       </div>
-      <p className="heads-up">
-        <strong>Heads up:</strong> Google will say &ldquo;Google hasn&rsquo;t verified this app.&rdquo; Click Continue (or Advanced &rsaquo; Go to
-        CosmoDrive). Making that screen go away can cost thousands a year, just to save you one click. So you click, and CosmoDrive
-        stays free.
-      </p>
       {canRequestAccess && (
-        <div className="beta-card">
-          <span className="eyebrow">Private beta</span>
-          <p>
-            <strong>New here? Request access first.</strong> We add your Google account to the beta by hand, then you sign in with it.
-          </p>
-          <button className="btn" onClick={onRequest}>
-            Request access <span className="arrow">→</span>
-          </button>
-        </div>
+        <p className="welcome-note">
+          <span className="eyebrow">Private beta</span> New here?{' '}
+          <button className="link-btn" onClick={onRequest}>
+            Request access
+          </button>{' '}
+          first. We add your Google account by hand.
+        </p>
       )}
       <ol className="features">
         <li>
@@ -326,13 +323,30 @@ function Welcome({ onConnect, onDemo, onSettings, onRequest }: { onConnect(): vo
           <span>We match every file against Drive&rsquo;s checksum and tell you exactly what&rsquo;s missing or broken.</span>
         </li>
       </ol>
-      <SignInSafety wide />
-      <p className="small beta">
+      <details className="before-signin">
+        <summary>
+          <span className="eyebrow">Before you sign in</span>
+          <span>Google&rsquo;s &ldquo;unverified app&rdquo; screen, and why your account stays yours</span>
+        </summary>
+        <p className="heads-up">
+          <strong>Heads up:</strong> Google will say &ldquo;Google hasn&rsquo;t verified this app.&rdquo; Click Continue (or Advanced &rsaquo;
+          Go to CosmoDrive). Making that screen go away can cost thousands a year, just to save you one click. So you click, and
+          CosmoDrive stays free.
+        </p>
+        <SignInSafety wide />
+      </details>
+      <p className="welcome-foot">
         <button className="link-btn" onClick={onSettings}>
           Download options
         </button>
+        <span aria-hidden>·</span>
+        <span>
+          Made by{' '}
+          <a href={SITE} target="_blank" rel="noreferrer">
+            Creation of Cosmos
+          </a>
+        </span>
       </p>
-      <p className="fine">Files go straight from Google to your computer. We have no server and never see them.</p>
     </section>
   )
 }
