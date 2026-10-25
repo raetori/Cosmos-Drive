@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { parseDriveLink, parseResourceKey } from '../lib/paths'
-import type { Settings } from '../lib/settings'
+import { BUILT_IN_CLIENT_ID, type Settings } from '../lib/settings'
 import type { Account } from '../lib/types'
 import { Close } from './Icons'
 
@@ -34,19 +34,21 @@ export function SettingsDialog({ settings, onSave, onClose }: { settings: Settin
           onSave({ ...draft, clientId: draft.clientId.trim() })
         }}
       >
-        <label>
-          <span>Google client ID (advanced)</span>
-          <input
-            value={draft.clientId}
-            onChange={(e) => setDraft({ ...draft, clientId: e.target.value })}
-            placeholder="Built in"
-            spellCheck={false}
-          />
-          <small>
-            CosmoDrive comes with its own, so leave this empty. Only fill it in to use your own Google Cloud project (type “Web
-            application”, with <code>{origin}</code> as an authorized JavaScript origin).
-          </small>
-        </label>
+        {!BUILT_IN_CLIENT_ID && (
+          <label>
+            <span>Google client ID</span>
+            <input
+              value={draft.clientId}
+              onChange={(e) => setDraft({ ...draft, clientId: e.target.value })}
+              placeholder="….apps.googleusercontent.com"
+              spellCheck={false}
+            />
+            <small>
+              This build has no client ID of its own. Create one in your Google Cloud project (type “Web
+              application”, with <code>{origin}</code> as an authorized JavaScript origin).
+            </small>
+          </label>
+        )}
         <label>
           <span>Google Docs, Sheets and Slides download as</span>
           <select value={draft.exportPref} onChange={(e) => setDraft({ ...draft, exportPref: e.target.value as Settings['exportPref'] })}>
