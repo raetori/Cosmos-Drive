@@ -72,9 +72,10 @@ export function useAccounts(clientId: string) {
     const token = await requestToken(clientId)
     const account = await fetchAccount(token.accessToken)
     storeToken(account.id, token)
+    // The demo has done its job once a real Drive is connected; it's still in the sidebar to bring back.
     setAccounts((prev) => {
-      const next = [...prev.filter((a) => a.id !== account.id), account]
-      save(ACCOUNTS_KEY, next.filter((a) => !a.demo))
+      const next = [...prev.filter((a) => a.id !== account.id && !a.demo), account]
+      save(ACCOUNTS_KEY, next)
       return next
     })
     return account
