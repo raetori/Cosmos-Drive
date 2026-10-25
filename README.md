@@ -40,7 +40,7 @@ npm test           # unit tests for the planner, folder copy and zip writer
 npm run build      # production build in dist/
 ```
 
-Click **Explore the demo** to try it right away. To use your real Drive, set up a Google client ID first.
+Click **Explore the demo** to try it right away. CosmoDrive's own Google client ID is in `.env`, so **Connect Google Drive** works on `http://localhost:5173` for anyone added as a test user. The steps below are only for running it under your own Google Cloud project.
 
 ## Google Cloud setup (one time, about 20 minutes)
 
@@ -56,7 +56,7 @@ Click **Explore the demo** to try it right away. To use your real Drive, set up 
    You don't need redirect URIs.
 7. Copy the **Client ID** (`…apps.googleusercontent.com`). You can either:
    - paste it into **Settings** inside the app, or
-   - put it in a `.env.local` file as `VITE_GOOGLE_CLIENT_ID=…` before building.
+   - put it in a `.env.local` file as `VITE_GOOGLE_CLIENT_ID=…` before building (it overrides the one in `.env`).
 
    The client ID is public by design. You don't need the client secret, so don't commit or share it.
 

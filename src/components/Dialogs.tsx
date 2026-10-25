@@ -35,16 +35,16 @@ export function SettingsDialog({ settings, onSave, onClose }: { settings: Settin
         }}
       >
         <label>
-          <span>Google OAuth client ID</span>
+          <span>Google client ID (advanced)</span>
           <input
             value={draft.clientId}
             onChange={(e) => setDraft({ ...draft, clientId: e.target.value })}
-            placeholder="1234567890-abc123.apps.googleusercontent.com"
+            placeholder="Built in"
             spellCheck={false}
           />
           <small>
-            Create one in Google Cloud Console (type “Web application”) and add <code>{origin}</code> as an authorized JavaScript origin.
-            Steps are in the README.
+            CosmoDrive comes with its own, so leave this empty. Only fill it in to use your own Google Cloud project (type “Web
+            application”, with <code>{origin}</code> as an authorized JavaScript origin).
           </small>
         </label>
         <label>

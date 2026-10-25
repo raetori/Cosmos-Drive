@@ -253,7 +253,7 @@ function Welcome({ onConnect, onDemo, onSettings }: { onConnect(): void; onDemo(
         </li>
       </ol>
       <button className="link-btn small" onClick={onSettings}>
-        Setup: Google client ID and download options
+        Download options
       </button>
       <p className="fine">Files go straight from Google to your computer. We have no server and never see them.</p>
     </section>
