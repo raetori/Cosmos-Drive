@@ -34,7 +34,7 @@ Copy to computer and streaming zips need the File System Access API: **Chrome, E
 ## Run it locally
 
 ```bash
-npm install
+npm install        # on an exFAT drive: npm install --no-bin-links
 npm run dev        # http://localhost:5173
 npm test           # unit tests for the planner, folder copy and zip writer
 npm run build      # production build in dist/
