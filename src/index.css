@@ -1089,13 +1089,18 @@ code {
   gap: 12px 26px;
 }
 
-.trust-note {
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
-  line-height: 1.5;
+.heads-up {
+  margin: 16px 0 0;
+  max-width: 740px;
+  font-size: 12.5px;
+  line-height: 1.55;
   color: var(--faint);
+  text-wrap: pretty;
+}
+
+.heads-up strong {
+  color: var(--accent-2);
+  font-weight: 500;
 }
 
 @media (max-width: 640px) {

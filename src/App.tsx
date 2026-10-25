@@ -281,6 +281,11 @@ function Welcome({ onConnect, onDemo, onSettings, onRequest }: { onConnect(): vo
           Explore the demo
         </button>
       </div>
+      <p className="heads-up">
+        <strong>Heads up:</strong> Google will say &ldquo;Google hasn&rsquo;t verified this app.&rdquo; Click Continue (or Advanced &rsaquo; Go to
+        CosmoDrive). Making that screen go away can cost thousands a year, just to save you one click. So you click, and CosmoDrive
+        stays free.
+      </p>
       {canRequestAccess && (
         <div className="beta-card">
           <span className="eyebrow">Private beta</span>
@@ -309,14 +314,7 @@ function Welcome({ onConnect, onDemo, onSettings, onRequest }: { onConnect(): vo
           <span>We match every file against Drive&rsquo;s checksum and tell you exactly what&rsquo;s missing or broken.</span>
         </li>
       </ol>
-      <SignInSafety wide>
-        {canRequestAccess && (
-          <p className="trust-note">
-            While we&rsquo;re in beta, Google shows &ldquo;Google hasn&rsquo;t verified this app&rdquo; at sign-in. That&rsquo;s expected: click
-            Continue.
-          </p>
-        )}
-      </SignInSafety>
+      <SignInSafety wide />
       <p className="small beta">
         <button className="link-btn" onClick={onSettings}>
           Download options

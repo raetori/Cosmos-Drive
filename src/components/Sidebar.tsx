@@ -76,7 +76,11 @@ export function Sidebar(p: Props) {
         })}
 
         <div className="sidebar-actions">
-          <button className="side-action" onClick={p.onConnect}>
+          <button
+            className="side-action"
+            onClick={p.onConnect}
+            title="Google will say “Google hasn’t verified this app.” Click Continue (or Advanced › Go to CosmoDrive)."
+          >
             <Plus width={16} height={16} /> Connect Google account
           </button>
           <button className="side-action" onClick={p.onAddLink} disabled={!p.accounts.length}>
