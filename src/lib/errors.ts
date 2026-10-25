@@ -16,7 +16,7 @@ const DRIVE_REASONS: Record<string, Explained> = {
     message: 'Google has locked this shared file for a while because it was downloaded too often. Try again in about 24 hours.',
     later: true,
   },
-  cannotDownloadFile: { message: 'The owner turned off downloading for this file.' },
+  cannotDownloadFile: { message: 'The owner turned off downloading for this file, so nobody can download it, even from Google Drive. Ask them to allow downloads.' },
   cannotDownloadAbusiveFile: { message: 'Google flagged this file as malware or abuse and blocks downloading it.' },
   exportSizeLimitExceeded: {
     message: 'This Google Doc is too large for Google to export (about 10 MB). Open it in Google Docs and use File → Download.',

@@ -11,7 +11,7 @@ import { Transfers } from './components/Transfers'
 import { useAccounts } from './hooks/useAccounts'
 import { useTransfers } from './hooks/useTransfers'
 import { canRequestAccess } from './lib/access'
-import { SignInClosed, virtualRoots } from './lib/google'
+import { DriveError, SignInClosed, virtualRoots } from './lib/google'
 import { LocalTree } from './lib/localfs'
 import { isFolder } from './lib/paths'
 import { allowWrite, canSaveFile, zipDestination } from './lib/pickers'
@@ -92,12 +92,24 @@ export default function App() {
     }
   }
 
-  const openLink = async (account: Account, id: string) => {
-    const item = await acc.sourceFor(account).get(id)
-    if (!isFolder(item.mimeType)) throw new Error('That link is to a single file. Paste the link of the folder it’s in.')
+  const openLink = async (account: Account, id: string, resourceKey?: string) => {
+    const source = acc.sourceFor(account)
+    let item: DriveItem
+    try {
+      item = await source.get(id, undefined, resourceKey)
+    } catch (e) {
+      if (e instanceof DriveError && (e.status === 404 || e.status === 403)) {
+        throw new Error(
+          `${account.email} can’t open this link. If it was shared with a different email, connect that account. Or ask the sender to share it with ${account.email}, or to set it to “Anyone with the link”.`,
+        )
+      }
+      throw e
+    }
+    setDialog(null)
+    // A single file has no folder to pin, so go straight to choosing where to copy it.
+    if (!isFolder(item.mimeType)) return copy(source, [item], item.name.replace(/\.[^.]+$/, '') || item.name)
     acc.addLink(account.id, item)
     setLocation({ account, root: item })
-    setDialog(null)
   }
 
   const disconnect = (account: Account) => {

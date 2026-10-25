@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { parseDriveLink } from '../lib/paths'
+import { parseDriveLink, parseResourceKey } from '../lib/paths'
 import type { Settings } from '../lib/settings'
 import type { Account } from '../lib/types'
 import { Close } from './Icons'
@@ -78,7 +78,7 @@ export function LinkDialog({
   onClose,
 }: {
   accounts: Account[]
-  onOpen(account: Account, id: string): Promise<void>
+  onOpen(account: Account, id: string, resourceKey?: string): Promise<void>
   onClose(): void
 }) {
   const [accountId, setAccountId] = useState(accounts.find((a) => !a.demo)?.id ?? accounts[0]?.id)
@@ -86,7 +86,7 @@ export function LinkDialog({
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   return (
-    <Modal title="Open a folder link" onClose={onClose}>
+    <Modal title="Open a shared link" onClose={onClose}>
       <form
         className="form"
         onSubmit={async (e) => {
@@ -100,15 +100,19 @@ export function LinkDialog({
           setBusy(true)
           setError('')
           try {
-            await onOpen(account, id)
+            await onOpen(account, id, parseResourceKey(link))
           } catch (err) {
             setError(err instanceof Error ? err.message : String(err))
             setBusy(false)
           }
         }}
       >
+        <small>
+          Got a Google Drive link from a client or a friend? Paste it here. Links shared &ldquo;with anyone who has the link&rdquo; never show up
+          under Shared with me, but they open fine here.
+        </small>
         <label>
-          <span>Drive folder link</span>
+          <span>Google Drive link</span>
           <input autoFocus value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" spellCheck={false} />
         </label>
         <label>
@@ -120,7 +124,7 @@ export function LinkDialog({
               </option>
             ))}
           </select>
-          <small>The account needs access to the folder. It is pinned under that account in the sidebar.</small>
+          <small>A folder gets pinned under this account in the sidebar. A single file goes straight to copying.</small>
         </label>
         {error && <p className="form-error">{error}</p>}
         <footer>
