@@ -72,9 +72,10 @@ export function useAccounts(clientId: string) {
     const token = await requestToken(clientId)
     const account = await fetchAccount(token.accessToken)
     storeToken(account.id, token)
+    // The demo has done its job once a real Drive is connected; it's still in the sidebar to bring back.
     setAccounts((prev) => {
-      const next = [...prev.filter((a) => a.id !== account.id), account]
-      save(ACCOUNTS_KEY, next.filter((a) => !a.demo))
+      const next = [...prev.filter((a) => a.id !== account.id && !a.demo), account]
+      save(ACCOUNTS_KEY, next)
       return next
     })
     return account
@@ -100,7 +101,7 @@ export function useAccounts(clientId: string) {
   }, [reauth])
 
   const addDemo = useCallback((): Account => {
-    const demo = sourceFor({ id: 'demo', email: 'demo@cosmos.drive', name: 'Demo account', demo: true }).account
+    const demo = sourceFor({ id: 'demo', email: 'demo@cosmodrive.app', name: 'Demo account', demo: true }).account
     setAccounts((prev) => (prev.some((a) => a.demo) ? prev : [demo, ...prev]))
     return demo
   }, [sourceFor])

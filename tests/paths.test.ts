@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NameAllocator, exportFor, formatBytes, parseDriveLink, sanitizeName, withExtension } from '../src/lib/paths'
+import { NameAllocator, exportFor, formatBytes, parseDriveLink, parseResourceKey, sanitizeName, withExtension } from '../src/lib/paths'
 
 describe('sanitizeName', () => {
   it('replaces characters that are illegal on Windows or macOS', () => {
@@ -37,6 +37,10 @@ describe('parseDriveLink', () => {
     expect(parseDriveLink(`https://drive.google.com/open?id=${id}`)).toBe(id)
     expect(parseDriveLink(id)).toBe(id)
     expect(parseDriveLink('not a link')).toBeNull()
+  })
+  it('keeps the resource key of older shared links', () => {
+    expect(parseResourceKey('https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz?resourcekey=0-AbC_d-123&usp=sharing')).toBe('0-AbC_d-123')
+    expect(parseResourceKey('https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz')).toBeUndefined()
   })
 })
 

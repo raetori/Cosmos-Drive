@@ -4,7 +4,7 @@ import { FOLDER_MIME, SHORTCUT_MIME, type Account, type DriveItem, type DriveSou
 
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
 const API = 'https://www.googleapis.com/drive/v3'
-const FIELDS = 'id,name,mimeType,size,md5Checksum,modifiedTime,driveId,iconLink,shortcutDetails'
+const FIELDS = 'id,name,mimeType,size,md5Checksum,modifiedTime,driveId,iconLink,shortcutDetails,resourceKey'
 
 export const VIRTUAL = {
   myDrive: '@my-drive',
@@ -77,6 +77,17 @@ export interface Token {
   expiresAt: number
 }
 
+/**
+ * The person closed Google's popup. Google doesn't say why, but while the app is in
+ * testing the usual reason is "Access blocked" for an account that isn't a test user.
+ */
+export class SignInClosed extends Error {
+  constructor() {
+    super('Sign-in was closed. If Google said “Access blocked”, that account isn’t on our beta list yet.')
+    this.name = 'SignInClosed'
+  }
+}
+
 /** Opens Google's consent popup. Must be called from a click handler so the popup isn't blocked. */
 export async function requestToken(clientId: string, loginHint?: string): Promise<Token> {
   await loadGis()
@@ -91,7 +102,7 @@ export async function requestToken(clientId: string, loginHint?: string): Promis
         }
         resolve({ accessToken: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 })
       },
-      error_callback: (e) => reject(new Error(e.type === 'popup_closed' ? 'Sign-in window was closed' : e.message || e.type)),
+      error_callback: (e) => reject(e.type === 'popup_closed' ? new SignInClosed() : new Error(e.message || e.type)),
     })
     client.requestAccessToken(loginHint ? { prompt: '', login_hint: loginHint } : { prompt: 'select_account' })
   })
@@ -194,11 +205,11 @@ export class GoogleDriveSource implements DriveSource {
     }
   }
 
-  private async json<T>(url: string, signal?: AbortSignal): Promise<T> {
-    return (await this.request(url, signal)).json()
+  private async json<T>(url: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<T> {
+    return (await this.request(url, signal, headers)).json()
   }
 
-  private async listQuery(params: Record<string, string>, signal?: AbortSignal): Promise<DriveItem[]> {
+  private async listQuery(params: Record<string, string>, signal?: AbortSignal, headers?: Record<string, string>): Promise<DriveItem[]> {
     const out: DriveItem[] = []
     let pageToken: string | undefined
     do {
@@ -210,7 +221,7 @@ export class GoogleDriveSource implements DriveSource {
         ...params,
       })
       if (pageToken) qs.set('pageToken', pageToken)
-      const page = await this.json<{ files: RawFile[]; nextPageToken?: string }>(`${API}/files?${qs}`, signal)
+      const page = await this.json<{ files: RawFile[]; nextPageToken?: string }>(`${API}/files?${qs}`, signal, headers)
       out.push(...page.files.map(toItem))
       pageToken = page.nextPageToken
     } while (pageToken)
@@ -223,7 +234,7 @@ export class GoogleDriveSource implements DriveSource {
       items.map(async (item) => {
         if (item.mimeType !== SHORTCUT_MIME || !item.shortcutTarget) return item
         try {
-          const target = await this.get(item.shortcutTarget, signal)
+          const target = await this.get(item.shortcutTarget, signal, item.shortcutTargetKey)
           return { ...target, name: item.name, shortcutOf: item.id }
         } catch {
           return item // Target deleted or not shared with us; leave the shortcut so it's reported as skipped.
@@ -253,12 +264,12 @@ export class GoogleDriveSource implements DriveSource {
     }
     const q = `'${escapeQuery(folder.id)}' in parents and trashed = false`
     const scope: Record<string, string> = folder.driveId ? { corpora: 'drive', driveId: folder.driveId } : {}
-    return this.listQuery({ q, orderBy: 'folder,name_natural', ...scope }, signal)
+    return this.listQuery({ q, orderBy: 'folder,name_natural', ...scope }, signal, keyHeader(folder.id, folder.resourceKey))
   }
 
-  async get(id: string, signal?: AbortSignal): Promise<DriveItem> {
-    const raw = await this.json<RawFile>(`${API}/files/${encodeURIComponent(id)}?fields=${FIELDS}&supportsAllDrives=true`, signal)
-    return toItem(raw)
+  async get(id: string, signal?: AbortSignal, resourceKey?: string): Promise<DriveItem> {
+    const url = `${API}/files/${encodeURIComponent(id)}?fields=${FIELDS}&supportsAllDrives=true`
+    return toItem(await this.json<RawFile>(url, signal, keyHeader(id, resourceKey)))
   }
 
   async search(text: string, signal?: AbortSignal): Promise<DriveItem[]> {
@@ -267,15 +278,24 @@ export class GoogleDriveSource implements DriveSource {
 
   async open(item: DriveItem, exportMime: string | null, signal?: AbortSignal, from = 0): Promise<Response> {
     const id = encodeURIComponent(item.id)
+    const key = keyHeader(item.id, item.resourceKey)
     if (exportMime) {
-      return this.request(`${API}/files/${id}/export?mimeType=${encodeURIComponent(exportMime)}`, signal)
+      return this.request(`${API}/files/${id}/export?mimeType=${encodeURIComponent(exportMime)}`, signal, key)
     }
     // A start offset resumes a download that dropped partway through.
-    const range: Record<string, string> = from ? { Range: `bytes=${from}-` } : {}
+    const range: Record<string, string> = { ...key, ...(from ? { Range: `bytes=${from}-` } : {}) }
     // Files Google flags as malware fail with cannotDownloadAbusiveFile; we report them
     // rather than silently passing acknowledgeAbuse.
     return this.request(`${API}/files/${id}?alt=media&supportsAllDrives=true`, signal, range)
   }
+}
+
+/**
+ * Files shared by link before Google's 2021 security update need their resource key (the
+ * `resourcekey=` part of the link) sent with every request, or Drive answers 404.
+ */
+function keyHeader(id: string, resourceKey?: string): Record<string, string> {
+  return resourceKey ? { 'X-Goog-Drive-Resource-Keys': `${id}/${resourceKey}` } : {}
 }
 
 function backoff(attempt: number): number {
@@ -291,7 +311,8 @@ interface RawFile {
   modifiedTime?: string
   driveId?: string
   iconLink?: string
-  shortcutDetails?: { targetId: string; targetMimeType: string }
+  shortcutDetails?: { targetId: string; targetMimeType: string; targetResourceKey?: string }
+  resourceKey?: string
 }
 
 function toItem(f: RawFile): DriveItem {
@@ -305,5 +326,7 @@ function toItem(f: RawFile): DriveItem {
     driveId: f.driveId,
     iconLink: f.iconLink,
     shortcutTarget: f.shortcutDetails?.targetId,
+    shortcutTargetKey: f.shortcutDetails?.targetResourceKey,
+    resourceKey: f.resourceKey,
   }
 }

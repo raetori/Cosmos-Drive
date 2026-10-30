@@ -1,19 +1,24 @@
 import { useCallback, useState } from 'react'
 import { Browser } from './components/Browser'
 import { LinkDialog, SettingsDialog } from './components/Dialogs'
-import { Alert, Close, Logo, Plus } from './components/Icons'
+import { Alert, Close, Logo } from './components/Icons'
 import { ReportDialog } from './components/Report'
+import { FolderTargetDialog, type FolderPurpose } from './components/FolderTarget'
+import { RequestAccessDialog, SignInSafety } from './components/RequestAccess'
 import { Sidebar } from './components/Sidebar'
 import { Starfield } from './components/Starfield'
 import { Transfers } from './components/Transfers'
 import { useAccounts } from './hooks/useAccounts'
 import { useTransfers } from './hooks/useTransfers'
-import { virtualRoots } from './lib/google'
+import { canRequestAccess } from './lib/access'
+import { DriveError, SignInClosed, virtualRoots } from './lib/google'
 import { LocalTree } from './lib/localfs'
 import { isFolder } from './lib/paths'
-import { canSaveFile, pickFolder, zipDestination } from './lib/pickers'
+import { allowWrite, canSaveFile, zipDestination } from './lib/pickers'
 import { loadSettings, saveSettings, type Settings } from './lib/settings'
 import type { Account, DriveItem, DriveSource } from './lib/types'
+
+const SITE = 'https://creationofcosmos.com'
 
 interface Location {
   account: Account
@@ -25,45 +30,55 @@ export default function App() {
   const acc = useAccounts(settings.clientId)
   const xfer = useTransfers(settings)
   const [location, setLocation] = useState<Location | null>(() => (acc.accounts[0] ? { account: acc.accounts[0], root: virtualRoots()[0] } : null))
-  const [dialog, setDialog] = useState<'settings' | 'link' | null>(null)
+  const [dialog, setDialog] = useState<'settings' | 'link' | 'access' | 'blocked' | null>(null)
+  const [target, setTarget] = useState<{
+    purpose: FolderPurpose
+    source: DriveSource
+    items: DriveItem[]
+    label: string
+    pending?: FileSystemDirectoryHandle
+  } | null>(null)
   const [reportId, setReportId] = useState<string | null>(null)
   const report = xfer.transfers.find((t) => t.id === reportId)
-  const [toast, setToast] = useState<{ text: string; tone?: 'warn' } | null>(null)
+  const [toast, setToast] = useState<{ text: string; tone?: 'warn'; action?: { label: string; run(): void } } | null>(null)
 
   const fail = (e: unknown) => setToast({ text: e instanceof Error ? e.message : String(e), tone: 'warn' })
 
   const connect = useCallback(async () => {
     if (!settings.clientId) {
-      setToast({ text: 'Add your Google OAuth client ID first. The README walks through getting one.' })
-      setDialog('settings')
+      // Only a developer build without VITE_GOOGLE_CLIENT_ID in .env gets here.
+      setToast({ text: 'This build has no Google client ID. Set VITE_GOOGLE_CLIENT_ID in .env (see the README).', tone: 'warn' })
       return
     }
     try {
       const account = await acc.connect()
       setLocation({ account, root: virtualRoots()[0] })
     } catch (e) {
-      fail(e)
+      if (e instanceof SignInClosed && canRequestAccess) setDialog('blocked')
+      else fail(e)
     }
   }, [acc, settings.clientId])
 
   const demo = () => setLocation({ account: acc.addDemo(), root: virtualRoots()[0] })
 
-  const copy = async (source: DriveSource, items: DriveItem[], label: string) => {
-    try {
-      const dir = await pickFolder()
-      if (dir) xfer.start('folder', source, items, { kind: 'folder', tree: new LocalTree(dir) }, label)
-    } catch (e) {
-      fail(e)
-    }
+  const copy = (source: DriveSource, items: DriveItem[], label: string) => setTarget({ purpose: 'copy', source, items, label })
+  const check = (source: DriveSource, items: DriveItem[], label: string) => setTarget({ purpose: 'check', source, items, label })
+
+  const startInto = (t: NonNullable<typeof target>, dir: FileSystemDirectoryHandle) => {
+    setTarget(null)
+    if (t.purpose === 'copy') xfer.start('folder', t.source, t.items, { kind: 'folder', tree: new LocalTree(dir) }, t.label)
+    else xfer.start('verify', t.source, t.items, { kind: 'verify', dir }, t.label)
   }
 
-  const check = async (source: DriveSource, items: DriveItem[], label: string) => {
+  /** A folder dropped straight on the browser: copy into it, or ask for the click Chrome needs first. */
+  const dropInto = async (source: DriveSource, items: DriveItem[], label: string, dir: FileSystemDirectoryHandle) => {
+    const t = { purpose: 'copy' as const, source, items, label }
     try {
-      const dir = await pickFolder()
-      if (dir) xfer.start('verify', source, items, { kind: 'verify', dir }, label)
-    } catch (e) {
-      fail(e)
+      if (await allowWrite(dir)) return startInto(t, dir)
+    } catch {
+      // No recent click: the dialog's Allow button supplies one.
     }
+    setTarget({ ...t, pending: dir })
   }
 
   const zip = async (source: DriveSource, items: DriveItem[], label: string) => {
@@ -79,12 +94,24 @@ export default function App() {
     }
   }
 
-  const openLink = async (account: Account, id: string) => {
-    const item = await acc.sourceFor(account).get(id)
-    if (!isFolder(item.mimeType)) throw new Error('That link is to a single file. Paste the link of the folder it’s in.')
+  const openLink = async (account: Account, id: string, resourceKey?: string) => {
+    const source = acc.sourceFor(account)
+    let item: DriveItem
+    try {
+      item = await source.get(id, undefined, resourceKey)
+    } catch (e) {
+      if (e instanceof DriveError && (e.status === 404 || e.status === 403)) {
+        throw new Error(
+          `${account.email} can’t open this link. If it was shared with a different email, connect that account. Or ask the sender to share it with ${account.email}, or to set it to “Anyone with the link”.`,
+        )
+      }
+      throw e
+    }
+    setDialog(null)
+    // A single file has no folder to pin, so go straight to choosing where to copy it.
+    if (!isFolder(item.mimeType)) return copy(source, [item], item.name.replace(/\.[^.]+$/, '') || item.name)
     acc.addLink(account.id, item)
     setLocation({ account, root: item })
-    setDialog(null)
   }
 
   const disconnect = (account: Account) => {
@@ -100,10 +127,8 @@ export default function App() {
       <Starfield />
       <header className="topbar">
         <div className="brand">
-          <Logo />
-          <span className="wordmark">
-            COSMOS <em>DRIVE</em>
-          </span>
+          <Logo className="logo" />
+          <span className="wordmark">CosmoDrive</span>
         </div>
         {location && (
           <div className="where">
@@ -112,8 +137,8 @@ export default function App() {
           </div>
         )}
         <div className="topbar-right">
-          <button className="btn ghost" onClick={connect}>
-            <Plus width={16} height={16} /> Connect account
+          <button className="nav-star" onClick={connect}>
+            <span>Connect account</span>
           </button>
         </div>
       </header>
@@ -161,9 +186,11 @@ export default function App() {
               onCopy={copy}
               onZip={zip}
               onCheck={check}
+              onDropFolder={(source, items, label, dir) => void dropInto(source, items, label, dir)}
+              onDropError={(text) => setToast({ text, tone: 'warn' })}
             />
           ) : (
-            <Welcome onConnect={connect} onDemo={demo} onSettings={() => setDialog('settings')} />
+            <Welcome onConnect={connect} onDemo={demo} onSettings={() => setDialog('settings')} onRequest={() => setDialog('access')} />
           )}
         </main>
       </div>
@@ -196,6 +223,17 @@ export default function App() {
       {toast && (
         <div className={`toast ${toast.tone ?? ''}`} role="status">
           <span>{toast.text}</span>
+          {toast.action && (
+            <button
+              className="btn small primary"
+              onClick={() => {
+                toast.action!.run()
+                setToast(null)
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
           <button className="icon-btn ghost" onClick={() => setToast(null)} aria-label="Dismiss">
             <Close width={14} height={14} />
           </button>
@@ -214,51 +252,101 @@ export default function App() {
           }}
         />
       )}
+      {target && (
+        <FolderTargetDialog
+          purpose={target.purpose}
+          label={target.label}
+          pending={target.pending}
+          onChosen={(dir) => startInto(target, dir)}
+          onClose={() => setTarget(null)}
+        />
+      )}
+      {dialog === 'access' && <RequestAccessDialog onClose={() => setDialog(null)} />}
+      {dialog === 'blocked' && (
+        <RequestAccessDialog
+          onClose={() => setDialog(null)}
+          onRetry={() => {
+            // Straight from the click, so Chrome lets Google's popup open.
+            setDialog(null)
+            void connect()
+          }}
+        />
+      )}
       {dialog === 'link' && <LinkDialog accounts={acc.accounts} onOpen={openLink} onClose={() => setDialog(null)} />}
     </div>
   )
 }
 
-function Welcome({ onConnect, onDemo, onSettings }: { onConnect(): void; onDemo(): void; onSettings(): void }) {
+function Welcome({ onConnect, onDemo, onSettings, onRequest }: { onConnect(): void; onDemo(): void; onSettings(): void; onRequest(): void }) {
   return (
     <section className="welcome">
-      <p className="eyebrow">Google Drive, without the zip mess</p>
-      <h1>
-        Your whole Drive.
-        <br />
-        <span className="glow">One move.</span>
-      </h1>
+      <a className="eyebrow eyebrow-link" href={SITE} target="_blank" rel="noreferrer">
+        Creation of Cosmos
+      </a>
+      <h1 className="title-card">CosmoDrive</h1>
+      <h2 className="headline">Your whole Drive. One move.</h2>
       <p className="lede">
-        Browse every Google account you own, then copy any folder to your computer exactly as it is in Drive. No 2&nbsp;GB splits, no
-        twenty zips to merge, no missing files.
+        Link every Google account you have, and we copy any folder to your computer exactly as it is in Drive. No 2&nbsp;GB splits, no
+        twenty zips to merge, and we check every file when it lands.
       </p>
       <div className="welcome-actions">
         <button className="btn primary large" onClick={onConnect}>
-          <Plus width={18} height={18} /> Connect Google Drive
+          Connect Google Drive <span className="arrow">→</span>
         </button>
         <button className="btn large" onClick={onDemo}>
           Explore the demo
         </button>
       </div>
-      <ul className="features">
+      {canRequestAccess && (
+        <p className="welcome-note">
+          <span className="eyebrow">Private beta</span> New here?{' '}
+          <button className="link-btn" onClick={onRequest}>
+            Request access
+          </button>{' '}
+          first. We add your Google account by hand.
+        </p>
+      )}
+      <ol className="features">
         <li>
-          <strong>Copy to computer</strong>
-          <span>Recreates the folder tree on your disk. Stop anytime and resume later: finished files are kept.</span>
+          <span className="eyebrow">01 · Copy</span>
+          <strong>The folder, as it is</strong>
+          <span>We rebuild the folder tree on your disk. Stop anytime and resume later; finished files stay put.</span>
         </li>
         <li>
+          <span className="eyebrow">02 · Zip</span>
           <strong>One zip, any size</strong>
           <span>Everything streams into a single zip as it downloads, well past 4&nbsp;GB.</span>
         </li>
         <li>
-          <strong>Every account, every drive</strong>
-          <span>My Drive, shared drives, shared with me, and any folder link.</span>
+          <span className="eyebrow">03 · Check</span>
+          <strong>Nothing goes missing</strong>
+          <span>We match every file against Drive&rsquo;s checksum and tell you exactly what&rsquo;s missing or broken.</span>
         </li>
-      </ul>
-      <button className="link-btn small" onClick={onSettings}>
-        Setup: Google client ID and download options
-      </button>
-      <p className="fine">Files go straight from Google to your computer. Cosmos Drive has no server and never sees them.</p>
+      </ol>
+      <details className="before-signin">
+        <summary>
+          <span className="eyebrow">Before you sign in</span>
+          <span>Google&rsquo;s &ldquo;unverified app&rdquo; screen, and why your account stays yours</span>
+        </summary>
+        <p className="heads-up">
+          <strong>Heads up:</strong> Google will say &ldquo;Google hasn&rsquo;t verified this app.&rdquo; Click Continue (or Advanced &rsaquo;
+          Go to CosmoDrive). Making that screen go away can cost thousands a year, just to save you one click. So you click, and
+          CosmoDrive stays free.
+        </p>
+        <SignInSafety wide />
+      </details>
+      <p className="welcome-foot">
+        <button className="link-btn" onClick={onSettings}>
+          Download options
+        </button>
+        <span aria-hidden>·</span>
+        <span>
+          Made by{' '}
+          <a href={SITE} target="_blank" rel="noreferrer">
+            Creation of Cosmos
+          </a>
+        </span>
+      </p>
     </section>
   )
 }
-
