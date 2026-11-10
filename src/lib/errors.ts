@@ -1,6 +1,6 @@
 // Turns Drive and file-system errors into plain explanations and decides how to react.
 
-import { DriveError } from './google'
+import { DriveError, SignInExpired } from './google'
 import { FolderNameError } from './localfs'
 
 export interface Explained {
@@ -28,6 +28,8 @@ const DRIVE_REASONS: Record<string, Explained> = {
 }
 
 export function explain(e: unknown): Explained {
+  // Stop the whole transfer so Resume can pick it up after signing in, instead of failing every file.
+  if (e instanceof SignInExpired) return { message: e.message, fatal: true }
   if (e instanceof DriveError) {
     const known = e.reason && DRIVE_REASONS[e.reason]
     if (known) return known

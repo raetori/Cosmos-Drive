@@ -147,7 +147,8 @@ export default function App() {
         <div className="banner" role="alert">
           <Alert width={16} height={16} />
           <span>
-            Google needs you to sign in again as <strong>{acc.reauth.account.email}</strong> to keep going.
+            Downloads are paused. Google needs you to sign in again as <strong>{acc.reauth.account.email}</strong>, then
+            everything picks up where it stopped. Tip: allow pop-ups for this site and we&rsquo;ll renew the sign-in for you.
           </span>
           <button className="btn small primary" onClick={acc.finishReauth}>
             Sign in
