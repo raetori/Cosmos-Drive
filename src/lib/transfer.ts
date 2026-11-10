@@ -218,6 +218,7 @@ export async function writeZip(
       } catch (e) {
         if (isAbort(e, signal)) throw e
         const why = explain(e)
+        if (why.fatal) throw new FatalTransferError(why.message)
         events.fileDone(file, 0, why.later ? 'later' : 'failed', why.message)
         continue
       }

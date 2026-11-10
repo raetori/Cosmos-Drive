@@ -88,23 +88,49 @@ export class SignInClosed extends Error {
   }
 }
 
+/** Google's sign-in has run out and the person chose not to sign in again yet. */
+export class SignInExpired extends Error {
+  constructor() {
+    super('Google sign-in expired. Sign in again, then press Resume; finished files are kept.')
+    this.name = 'SignInExpired'
+  }
+}
+
 /** Opens Google's consent popup. Must be called from a click handler so the popup isn't blocked. */
-export async function requestToken(clientId: string, loginHint?: string): Promise<Token> {
+export function requestToken(clientId: string, loginHint?: string): Promise<Token> {
+  return tokenRequest(clientId, loginHint ? { prompt: '', login_hint: loginHint } : { prompt: 'select_account' })
+}
+
+/**
+ * Renews an account's token without showing anything: Google answers in a popup that
+ * closes by itself, or fails if it needs the person to click something. Browsers block
+ * that popup unless the page was just clicked or the site is allowed to open pop-ups,
+ * so this can fail; callers fall back to asking the person.
+ */
+export function silentToken(clientId: string, loginHint: string, timeoutMs = 30_000): Promise<Token> {
+  return tokenRequest(clientId, { prompt: 'none', login_hint: loginHint }, timeoutMs)
+}
+
+async function tokenRequest(clientId: string, overrides: { prompt: string; login_hint?: string }, timeoutMs?: number): Promise<Token> {
   await loadGis()
   return new Promise((resolve, reject) => {
+    // Google doesn't always call back when a popup is blocked, so give up after a while.
+    const timer = timeoutMs ? setTimeout(() => reject(new Error('Google sign-in timed out')), timeoutMs) : undefined
+    const settle = (fn: () => void) => {
+      clearTimeout(timer)
+      fn()
+    }
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: DRIVE_SCOPE,
-      callback: (r) => {
-        if (r.error || !r.access_token) {
-          reject(new Error(r.error_description || r.error || 'Sign-in failed'))
-          return
-        }
-        resolve({ accessToken: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 })
-      },
-      error_callback: (e) => reject(e.type === 'popup_closed' ? new SignInClosed() : new Error(e.message || e.type)),
+      callback: (r) =>
+        settle(() => {
+          if (r.error || !r.access_token) reject(new Error(r.error_description || r.error || 'Sign-in failed'))
+          else resolve({ accessToken: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 })
+        }),
+      error_callback: (e) => settle(() => reject(e.type === 'popup_closed' ? new SignInClosed() : new Error(e.message || e.type))),
     })
-    client.requestAccessToken(loginHint ? { prompt: '', login_hint: loginHint } : { prompt: 'select_account' })
+    client.requestAccessToken(overrides)
   })
 }
 
