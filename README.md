@@ -79,13 +79,12 @@ Any static host works. `npm run build` creates `dist/`, which you can upload to 
 Google's browser sign-in only lasts an hour, and renewing it needs a popup. On a deployment
 the small functions in `api/` keep people signed in instead: they swap the sign-in code for a
 refresh token, keep it encrypted in an HttpOnly cookie, and hand the app fresh tokens without
-any popup. Set these in Vercel → Project → Settings → Environment Variables (Production):
+any popup. In Vercel → Project → Settings → Environment Variables (Production), add:
 
-- `GOOGLE_CLIENT_ID`: the same client ID as `VITE_GOOGLE_CLIENT_ID`.
 - `GOOGLE_CLIENT_SECRET`: Google Cloud → APIs & Services → Credentials → the OAuth client → Client secrets. Keep it out of git and chat.
-- `SESSION_KEY`: a random string of 32+ characters (`openssl rand -base64 48`). Changing it signs everyone out.
+- Optional: `SESSION_KEY` (a random string that encrypts the cookie; defaults to one derived from the secret) and `GOOGLE_CLIENT_ID` (defaults to the app's client ID). Changing either the secret or the key signs everyone out.
 
-Without them (or on `npm run dev`) the app falls back to the one-hour browser sign-in. While the
+Without the secret (or on `npm run dev`) the app falls back to the one-hour browser sign-in. While the
 app is in Google's testing mode, Google ends these sign-ins after 7 days, so expect one sign-in a week.
 
 ## How it works

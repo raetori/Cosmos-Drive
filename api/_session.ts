@@ -5,9 +5,9 @@
 // downloads keep going while nobody is at the computer.
 //
 // Environment (Vercel → Project → Settings → Environment Variables):
-//   GOOGLE_CLIENT_ID      the same public client ID the app is built with
-//   GOOGLE_CLIENT_SECRET  that client's secret (Google Cloud → Credentials)
-//   SESSION_KEY           a long random string used to encrypt the cookie
+//   GOOGLE_CLIENT_SECRET  the OAuth client's secret (Google Cloud → Credentials). Required.
+//   SESSION_KEY           optional; encrypts the cookie. Defaults to a key derived from the secret.
+//   GOOGLE_CLIENT_ID      optional; defaults to the app's public client ID below.
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 
@@ -22,12 +22,16 @@ export interface Config {
   key: Buffer
 }
 
+/** The app's OAuth client ID (public by design; the same value as VITE_GOOGLE_CLIENT_ID in .env). */
+const DEFAULT_CLIENT_ID = '1066244218964-pjqfvbk3j23ov0l05tgb2jt6fe7l48mj.apps.googleusercontent.com'
+
 export function config(): Config | null {
-  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID
+  const clientId = process.env.GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-  const secret = process.env.SESSION_KEY
-  if (!clientId || !clientSecret || !secret || secret.length < 32) return null
-  return { clientId, clientSecret, key: createHash('sha256').update(secret).digest() }
+  if (!clientSecret) return null
+  // Changing either value signs everyone out, which is what you'd want after a leak.
+  const secret = process.env.SESSION_KEY || clientSecret
+  return { clientId, clientSecret, key: createHash('sha256').update(`cosmodrive-session:${secret}`).digest() }
 }
 
 export function json(body: unknown, status = 200, headers: Record<string, string | string[]> = {}): Response {

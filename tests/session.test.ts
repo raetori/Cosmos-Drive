@@ -39,7 +39,6 @@ const cookieOf = (r: Response) => r.headers.get('set-cookie')!.split(';')[0]
 beforeEach(() => {
   vi.stubEnv('GOOGLE_CLIENT_ID', 'client-id')
   vi.stubEnv('GOOGLE_CLIENT_SECRET', 'client-secret')
-  vi.stubEnv('SESSION_KEY', 'x'.repeat(48))
 })
 afterEach(() => {
   vi.unstubAllGlobals()
