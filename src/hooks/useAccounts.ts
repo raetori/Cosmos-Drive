@@ -1,12 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DemoSource } from '../lib/demo'
-import { GoogleDriveSource, SignInExpired, fetchAccount, requestToken, revokeToken, silentToken, type Token } from '../lib/google'
+import {
+  GoogleDriveSource,
+  NeedsConsent,
+  ServerSignedOut,
+  SignInExpired,
+  fetchAccount,
+  requestToken,
+  revokeToken,
+  serverAvailable,
+  serverSignIn,
+  serverSignOut,
+  serverToken,
+  silentToken,
+  type Token,
+} from '../lib/google'
 import { load, save } from '../lib/storage'
 import type { Account, DriveItem, DriveSource, LinkedFolder } from '../lib/types'
 
 const ACCOUNTS_KEY = 'cosmos.accounts'
 const LINKS_KEY = 'cosmos.links'
 const TOKENS_KEY = 'cosmos.tokens'
+/** Accounts the server keeps signed in (just their ids; the sign-in itself is in an HttpOnly cookie). */
+const SERVER_KEY = 'cosmos.staySignedIn'
 
 /** Renew a token this long before Google's one-hour limit, so a long download never hits it. */
 const RENEW_AHEAD = 10 * 60_000
@@ -33,6 +49,41 @@ export function useAccounts(clientId: string) {
     save(TOKENS_KEY, Object.fromEntries(tokens.current), sessionStorage)
   }
 
+  const serverIds = useRef(new Set<string>(load<string[]>(SERVER_KEY, [])))
+  const setServer = (id: string, on: boolean) => {
+    if (on) serverIds.current.add(id)
+    else serverIds.current.delete(id)
+    save(SERVER_KEY, [...serverIds.current])
+  }
+  const server = useRef(false)
+  useEffect(() => {
+    // Ask early so a sign-in click can open Google's popup straight away.
+    void serverAvailable().then((ok) => (server.current = ok))
+  }, [])
+
+  /**
+   * Signs in from a click. When the deployment can keep people signed in, the server
+   * takes over renewing; otherwise (local dev) it's Google's one-hour browser sign-in.
+   */
+  const signIn = async (loginHint?: string): Promise<{ token: Token; account?: Account }> => {
+    if (!(server.current || (await serverAvailable()))) return { token: await requestToken(clientId, loginHint) }
+    let result
+    try {
+      result = await serverSignIn(clientId, loginHint)
+    } catch (e) {
+      if (!(e instanceof NeedsConsent)) throw e
+      // Google skipped the refresh token because this account allowed the app before.
+      // The grant was reset, so one more popup brings one. Browsers may block it this
+      // time (no fresh click); then the person clicks again.
+      try {
+        result = await serverSignIn(clientId, loginHint)
+      } catch {
+        throw new Error('One more step: click again and allow access, so we can keep you signed in during long downloads.')
+      }
+    }
+    return { token: result.token, account: { id: result.email, email: result.email, name: result.email } }
+  }
+
   const persistAccounts = (next: Account[]) => {
     setAccounts(next)
     save(ACCOUNTS_KEY, next.filter((a) => !a.demo))
@@ -46,11 +97,24 @@ export function useAccounts(clientId: string) {
   const silentFailedFor = useRef(new Map<string, number>())
   const lastGestureTry = useRef(new Map<string, number>())
 
+  /** The server renews without a popup; only if it has no sign-in for the account do we try Google's popup. */
+  const quietToken = async (account: Account): Promise<Token> => {
+    if (serverIds.current.has(account.id)) {
+      try {
+        return await serverToken(account.email)
+      } catch (e) {
+        if (!(e instanceof ServerSignedOut)) throw e
+        setServer(account.id, false)
+      }
+    }
+    return silentToken(clientIdRef.current, account.email)
+  }
+
   const renewSilently = (account: Account): Promise<string> => {
     let p = silentInFlight.current.get(account.id)
     if (!p) {
       const failedFor = tokens.current.get(account.id)?.expiresAt ?? 0
-      p = silentToken(clientIdRef.current, account.email)
+      p = quietToken(account)
         .then((t) => {
           storeToken(account.id, t)
           silentFailedFor.current.delete(account.id)
@@ -114,7 +178,7 @@ export function useAccounts(clientId: string) {
       })
     const tick = setInterval(() => {
       for (const a of due()) {
-        if (silentFailedFor.current.get(a.id) === tokens.current.get(a.id)?.expiresAt) continue
+        if (!serverIds.current.has(a.id) && silentFailedFor.current.get(a.id) === tokens.current.get(a.id)?.expiresAt) continue
         renewSilently(a).catch(() => {})
       }
     }, 30_000)
@@ -160,9 +224,10 @@ export function useAccounts(clientId: string) {
 
   /** Opens Google's account chooser and adds whichever account the user picks. */
   const connect = useCallback(async (): Promise<Account> => {
-    const token = await requestToken(clientId)
+    const { token, account: viaServer } = await signIn()
     const account = await fetchAccount(token.accessToken)
     storeToken(account.id, token)
+    setServer(account.id, !!viaServer)
     // The demo has done its job once a real Drive is connected; it's still in the sidebar to bring back.
     setAccounts((prev) => {
       const next = [...prev.filter((a) => a.id !== account.id && !a.demo), account]
@@ -170,20 +235,27 @@ export function useAccounts(clientId: string) {
       return next
     })
     return account
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- signIn reads refs and clientId
   }, [clientId])
 
   /** Called from the "Reconnect" button, so the popup counts as user-initiated. */
   const finishReauth = useCallback(async () => {
     if (!reauth) return
     try {
-      const token = await requestToken(clientId, reauth.account.email)
+      const { token, account: viaServer } = await signIn(reauth.account.email)
+      if (viaServer && viaServer.email.toLowerCase() !== reauth.account.email.toLowerCase()) {
+        serverSignOut(viaServer.email)
+        throw new Error(`Signed in as ${viaServer.email}, not ${reauth.account.email}`)
+      }
       storeToken(reauth.account.id, token)
+      setServer(reauth.account.id, !!viaServer)
       reauth.resolve(token.accessToken)
       setReauth(null)
     } catch (e) {
       // Leave the banner up so the user can try again or cancel.
       console.warn(e)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- signIn reads refs and clientId
   }, [clientId, reauth])
 
   const cancelReauth = useCallback(() => {
@@ -201,6 +273,8 @@ export function useAccounts(clientId: string) {
     (account: Account) => {
       const t = tokens.current.get(account.id)
       if (t) revokeToken(t.accessToken)
+      if (serverIds.current.has(account.id)) serverSignOut(account.email)
+      setServer(account.id, false)
       tokens.current.delete(account.id)
       save(TOKENS_KEY, Object.fromEntries(tokens.current), sessionStorage)
       sources.current.delete(account.id)
