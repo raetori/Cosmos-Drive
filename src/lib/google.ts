@@ -47,6 +47,15 @@ declare global {
             callback: (r: TokenResponse) => void
             error_callback?: (e: { type: string; message?: string }) => void
           }): TokenClient
+          initCodeClient(config: {
+            client_id: string
+            scope: string
+            ux_mode: 'popup'
+            login_hint?: string
+            select_account?: boolean
+            callback: (r: { code?: string; error?: string; error_description?: string }) => void
+            error_callback?: (e: { type: string; message?: string }) => void
+          }): { requestCode(): void }
           revoke(token: string, done?: () => void): void
         }
       }
@@ -132,6 +141,77 @@ async function tokenRequest(clientId: string, overrides: { prompt: string; login
     })
     client.requestAccessToken(overrides)
   })
+}
+
+// ---------------------------------------------------------------------------
+// Staying signed in through the server (api/). The browser-only sign-in above gives
+// one-hour tokens that need a popup to renew; the server keeps a refresh token in an
+// HttpOnly cookie and renews without one.
+
+/** Thrown when Google gave no refresh token; the server has reset the grant so the next sign-in brings one. */
+export class NeedsConsent extends Error {
+  constructor() {
+    super('One more sign-in so we can keep you signed in during long downloads.')
+    this.name = 'NeedsConsent'
+  }
+}
+
+/** The server no longer holds a sign-in for this account (revoked, or a week old in Google's testing mode). */
+export class ServerSignedOut extends Error {}
+
+let serverCheck: Promise<boolean> | null = null
+
+/** True when the deployment can keep people signed in (its keys are set). False on `npm run dev`. */
+export function serverAvailable(): Promise<boolean> {
+  serverCheck ??= fetch('/api/health', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((b) => b?.staySignedIn === true)
+    .catch(() => false)
+  return serverCheck
+}
+
+async function post(path: string, body: unknown): Promise<Response> {
+  return fetch(path, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+/** Opens Google's popup for a one-time code and lets the server swap it. Call from a click. */
+export async function serverSignIn(clientId: string, loginHint?: string): Promise<{ token: Token; email: string }> {
+  await loadGis()
+  const code = await new Promise<string>((resolve, reject) => {
+    window
+      .google!.accounts.oauth2.initCodeClient({
+        client_id: clientId,
+        scope: DRIVE_SCOPE,
+        ux_mode: 'popup',
+        ...(loginHint ? { login_hint: loginHint } : { select_account: true }),
+        callback: (r) => (r.code ? resolve(r.code) : reject(new Error(r.error_description || r.error || 'Sign-in failed'))),
+        error_callback: (e) => reject(e.type === 'popup_closed' ? new SignInClosed() : new Error(e.message || e.type)),
+      })
+      .requestCode()
+  })
+  const r = await post('/api/auth', { code })
+  const body = await r.json().catch(() => ({}))
+  if (r.status === 409 && body.error === 'needs_consent') throw new NeedsConsent()
+  if (!r.ok || !body.access_token) throw new Error(`Sign-in failed (${body.error ?? r.status})`)
+  return { token: { accessToken: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 }, email: body.email }
+}
+
+/** A fresh token from the server's stored sign-in. No popup, so it works while nobody is at the computer. */
+export async function serverToken(email: string): Promise<Token> {
+  const r = await post('/api/token', { email })
+  const body = await r.json().catch(() => ({}))
+  if (r.status === 401) throw new ServerSignedOut('Google sign-in expired')
+  if (!r.ok || !body.access_token) throw new Error(`Could not renew sign-in (${body.error ?? r.status})`)
+  return { accessToken: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 }
+}
+
+export function serverSignOut(email: string): void {
+  void post('/api/signout', { email }).catch(() => {})
 }
 
 export function revokeToken(token: string): void {
