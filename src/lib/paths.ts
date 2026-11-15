@@ -106,6 +106,11 @@ export function parseDriveLink(input: string): string | null {
   return null
 }
 
+/** The `resourcekey=` part of an older shared link, if any. */
+export function parseResourceKey(input: string): string | undefined {
+  return input.match(/[?&]resourcekey=([\w-]+)/i)?.[1]
+}
+
 export function formatBytes(bytes?: number): string {
   if (bytes === undefined || Number.isNaN(bytes)) return '—'
   if (bytes < 1024) return `${bytes} B`

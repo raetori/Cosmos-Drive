@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DemoSource, demoContent } from '../src/lib/demo'
-import { VIRTUAL, virtualRoots } from '../src/lib/google'
+import { SignInExpired, VIRTUAL, virtualRoots } from '../src/lib/google'
 import { LocalTree, lineUp } from '../src/lib/localfs'
 import { planTransfer, subsetPlan } from '../src/lib/plan'
 import { FatalTransferError, copyToFolder, writeZip, type TransferEvents } from '../src/lib/transfer'
@@ -180,6 +180,33 @@ describe('copyToFolder', () => {
     const { events } = recorder()
     await expect(copyToFolder(src, plan, tree(root), events)).rejects.toThrow(FatalTransferError)
     await expect(copyToFolder(src, plan, tree(root), events)).rejects.toThrow(/disk is full/)
+  })
+})
+
+describe('expired Google sign-in', () => {
+  it('stops a folder copy so Resume can finish it, keeping what was copied', async () => {
+    const base = new DemoSource({ bytesPerSecond: 0 })
+    const plan = await planTransfer(base, [await folderNamed(base, myDrive, 'Photos')], { exportPref: 'office' })
+    let opened = 0
+    const src = wrap(base, (item, mime, signal, from) => (++opened > 2 ? Promise.reject(new SignInExpired()) : base.open(item, mime, signal, from)))
+    const root = new MemDir('root')
+    const { events } = recorder()
+    await expect(copyToFolder(src, plan, tree(root), events, { concurrency: 1 })).rejects.toThrow(/sign-in expired/)
+
+    // After signing in again, Resume skips the files already on disk.
+    const again = recorder()
+    await copyToFolder(base, plan, tree(root), again.events)
+    expect(again.only('reused').length).toBe(2)
+    expect(again.only('failed')).toEqual([])
+  })
+
+  it('stops a zip instead of marking every remaining file failed', async () => {
+    const base = new DemoSource({ bytesPerSecond: 0 })
+    const plan = await planTransfer(base, [await folderNamed(base, myDrive, 'Photos')], { exportPref: 'office' })
+    const src = wrap(base, () => Promise.reject(new SignInExpired()))
+    const { events, log } = recorder()
+    await expect(writeZip(src, plan, new WritableStream(), events)).rejects.toThrow(/sign-in expired/)
+    expect(log.outcomes.size).toBe(0)
   })
 })
 

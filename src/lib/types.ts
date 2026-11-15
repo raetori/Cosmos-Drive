@@ -3,7 +3,7 @@
 export const FOLDER_MIME = 'application/vnd.google-apps.folder'
 export const SHORTCUT_MIME = 'application/vnd.google-apps.shortcut'
 
-/** A file or folder as Cosmos Drive sees it. Virtual roots use ids like `@my-drive`. */
+/** A file or folder as CosmoDrive sees it. Virtual roots use ids like `@my-drive`. */
 export interface DriveItem {
   id: string
   name: string
@@ -18,6 +18,10 @@ export interface DriveItem {
   shortcutOf?: string
   /** Set on a shortcut we could not resolve: the id it points to. */
   shortcutTarget?: string
+  /** The shortcut target's resource key, if it has one. */
+  shortcutTargetKey?: string
+  /** Older link-shared files need this key (from the link or from Drive) to be opened. */
+  resourceKey?: string
   iconLink?: string
   /** Virtual nodes (My Drive, Shared drives, ...) can be browsed but not downloaded as a unit. */
   virtual?: boolean
@@ -50,7 +54,7 @@ export interface DriveSource {
   account: Account
   /** Children of a folder (or of a virtual root). Follows all pages. */
   list(folder: DriveItem, signal?: AbortSignal): Promise<DriveItem[]>
-  get(id: string, signal?: AbortSignal): Promise<DriveItem>
+  get(id: string, signal?: AbortSignal, resourceKey?: string): Promise<DriveItem>
   search(text: string, signal?: AbortSignal): Promise<DriveItem[]>
   /**
    * Opens a byte stream for a binary file, or an export for a Google Docs-type file.

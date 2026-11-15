@@ -51,7 +51,7 @@ export function ReportDialog({ transfer: t, onClose, onFix, onRecheck }: Props) 
     const url = URL.createObjectURL(new Blob([reportCsv(t.report)], { type: 'text/csv;charset=utf-8' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = `${t.label} - Cosmos Drive report.csv`
+    a.download = `${t.label} - CosmoDrive report.csv`
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 30_000)
   }

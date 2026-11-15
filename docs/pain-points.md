@@ -1,8 +1,8 @@
 # Big Google Drive downloads: what goes wrong
 
-This is research from October 2026 into what people run into when they move large folders out of Google Drive, and what Cosmos Drive does about each problem. Sources: Google Workspace Updates, Adobe Community (Premiere Pro), and troubleshooting write-ups from backup and migration vendors (cbackup, allthings.how, Movebot, Make, fast.io, winhelponline). Reddit couldn't be reached from the build environment, so threads there still need a pass.
+This is research from October 2026 into what people run into when they move large folders out of Google Drive, and what CosmoDrive does about each problem. Sources: Google Workspace Updates, Adobe Community (Premiere Pro), and troubleshooting write-ups from backup and migration vendors (cbackup, allthings.how, Movebot, Make, fast.io, winhelponline). Reddit couldn't be reached from the build environment, so threads there still need a pass.
 
-| # | What people hit | Why it happens | Cosmos Drive |
+| # | What people hit | Why it happens | CosmoDrive |
 |---|---|---|---|
 | 1 | One download turns into many `drive-download-…-N.zip` files | Drive's web download splits archives at about 2 GB | **Copy to computer** writes the real folder tree. **One zip** streams a single ZIP64 file with no size cap |
 | 2 | "Zipping…" never finishes, or finishes and the download never starts | Server-side zipping plus browser cookie and pop-up quirks; large folders and many files (reported around 500+) make it worse | No server-side zipping. Files stream straight from the Drive API |

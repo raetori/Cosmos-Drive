@@ -4,7 +4,7 @@ import { FOLDER_MIME, SHORTCUT_MIME, type Account, type DriveItem, type DriveSou
 
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
 const API = 'https://www.googleapis.com/drive/v3'
-const FIELDS = 'id,name,mimeType,size,md5Checksum,modifiedTime,driveId,iconLink,shortcutDetails'
+const FIELDS = 'id,name,mimeType,size,md5Checksum,modifiedTime,driveId,iconLink,shortcutDetails,resourceKey'
 
 export const VIRTUAL = {
   myDrive: '@my-drive',
@@ -47,6 +47,15 @@ declare global {
             callback: (r: TokenResponse) => void
             error_callback?: (e: { type: string; message?: string }) => void
           }): TokenClient
+          initCodeClient(config: {
+            client_id: string
+            scope: string
+            ux_mode: 'popup'
+            login_hint?: string
+            select_account?: boolean
+            callback: (r: { code?: string; error?: string; error_description?: string }) => void
+            error_callback?: (e: { type: string; message?: string }) => void
+          }): { requestCode(): void }
           revoke(token: string, done?: () => void): void
         }
       }
@@ -56,7 +65,7 @@ declare global {
 
 let gisLoading: Promise<void> | null = null
 
-function loadGis(): Promise<void> {
+export function loadGis(): Promise<void> {
   if (window.google?.accounts) return Promise.resolve()
   gisLoading ??= new Promise((resolve, reject) => {
     const s = document.createElement('script')
@@ -77,24 +86,186 @@ export interface Token {
   expiresAt: number
 }
 
+/**
+ * The person closed Google's popup. Google doesn't say why, but while the app is in
+ * testing the usual reason is "Access blocked" for an account that isn't a test user.
+ */
+export class SignInClosed extends Error {
+  constructor() {
+    super('Sign-in was closed. If Google said “Access blocked”, that account isn’t on our beta list yet.')
+    this.name = 'SignInClosed'
+  }
+}
+
+/** Google's sign-in has run out and the person chose not to sign in again yet. */
+export class SignInExpired extends Error {
+  constructor() {
+    super('Google sign-in expired. Sign in again, then press Resume; finished files are kept.')
+    this.name = 'SignInExpired'
+  }
+}
+
 /** Opens Google's consent popup. Must be called from a click handler so the popup isn't blocked. */
-export async function requestToken(clientId: string, loginHint?: string): Promise<Token> {
-  await loadGis()
+export function requestToken(clientId: string, loginHint?: string): Promise<Token> {
+  return tokenRequest(clientId, loginHint ? { prompt: '', login_hint: loginHint } : { prompt: 'select_account' })
+}
+
+/**
+ * Renews an account's token without showing anything: Google answers in a popup that
+ * closes by itself, or fails if it needs the person to click something. Browsers block
+ * that popup unless the page was just clicked or the site is allowed to open pop-ups,
+ * so this can fail; callers fall back to asking the person.
+ */
+export function silentToken(clientId: string, loginHint: string, timeoutMs = 30_000): Promise<Token> {
+  return tokenRequest(clientId, { prompt: 'none', login_hint: loginHint }, timeoutMs)
+}
+
+async function tokenRequest(clientId: string, overrides: { prompt: string; login_hint?: string }, timeoutMs?: number): Promise<Token> {
+  // Safari blocks a popup unless it opens straight from the click, so don't wait when the script is loaded.
+  if (!window.google?.accounts) await loadGis()
   return new Promise((resolve, reject) => {
+    // Google doesn't always call back when a popup is blocked, so give up after a while.
+    const timer = timeoutMs ? setTimeout(() => reject(new Error('Google sign-in timed out')), timeoutMs) : undefined
+    const settle = (fn: () => void) => {
+      clearTimeout(timer)
+      fn()
+    }
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: DRIVE_SCOPE,
-      callback: (r) => {
-        if (r.error || !r.access_token) {
-          reject(new Error(r.error_description || r.error || 'Sign-in failed'))
-          return
-        }
-        resolve({ accessToken: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 })
-      },
-      error_callback: (e) => reject(new Error(e.type === 'popup_closed' ? 'Sign-in window was closed' : e.message || e.type)),
+      callback: (r) =>
+        settle(() => {
+          if (r.error || !r.access_token) reject(new Error(r.error_description || r.error || 'Sign-in failed'))
+          else resolve({ accessToken: r.access_token, expiresAt: Date.now() + (r.expires_in ?? 3600) * 1000 })
+        }),
+      error_callback: (e) => settle(() => reject(e.type === 'popup_closed' ? new SignInClosed() : new Error(e.message || e.type))),
     })
-    client.requestAccessToken(loginHint ? { prompt: '', login_hint: loginHint } : { prompt: 'select_account' })
+    client.requestAccessToken(overrides)
   })
+}
+
+// ---------------------------------------------------------------------------
+// Staying signed in through the server (api/). The browser-only sign-in above gives
+// one-hour tokens that need a popup to renew; the server keeps a refresh token in an
+// HttpOnly cookie and renews without one.
+
+/** Thrown when Google gave no refresh token; the server has reset the grant so the next sign-in brings one. */
+export class NeedsConsent extends Error {
+  constructor() {
+    super('One more sign-in so we can keep you signed in during long downloads.')
+    this.name = 'NeedsConsent'
+  }
+}
+
+/** The server no longer holds a sign-in for this account (revoked, or a week old in Google's testing mode). */
+export class ServerSignedOut extends Error {}
+
+let serverCheck: Promise<boolean> | null = null
+
+/** True when the deployment can keep people signed in (its keys are set). False on `npm run dev`. */
+export function serverAvailable(): Promise<boolean> {
+  serverCheck ??= fetch('/api/health', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((b) => b?.staySignedIn === true)
+    .catch(() => false)
+  return serverCheck
+}
+
+async function post(path: string, body: unknown): Promise<Response> {
+  return fetch(path, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+/** Opens Google's popup for a one-time code and lets the server swap it. Call from a click. */
+export async function serverSignIn(clientId: string, loginHint?: string): Promise<{ token: Token; email: string }> {
+  // Safari blocks a popup unless it opens straight from the click, so don't wait when the script is loaded.
+  if (!window.google?.accounts) await loadGis()
+  const code = await new Promise<string>((resolve, reject) => {
+    // Google's popup answers through window.opener. Some sign-in steps cut that link, and
+    // the browser then also hides whether the popup was closed, so Google never calls back.
+    // Once this page has had focus back for a few seconds with no answer, treat it as closed.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const done = () => {
+      clearTimeout(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+    const onFocus = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (!document.hasFocus()) return
+        done()
+        reject(new SignInClosed())
+      }, 4000)
+    }
+    window.addEventListener('focus', onFocus)
+    window
+      .google!.accounts.oauth2.initCodeClient({
+        client_id: clientId,
+        scope: DRIVE_SCOPE,
+        ux_mode: 'popup',
+        ...(loginHint ? { login_hint: loginHint } : { select_account: true }),
+        callback: (r) => {
+          done()
+          if (r.code) resolve(r.code)
+          else reject(new Error(r.error_description || r.error || 'Sign-in failed'))
+        },
+        error_callback: (e) => {
+          done()
+          reject(e.type === 'popup_closed' ? new SignInClosed() : new Error(e.message || e.type))
+        },
+      })
+      .requestCode()
+  })
+  const r = await post('/api/auth', { code })
+  const body = await r.json().catch(() => ({}))
+  if (r.status === 409 && body.error === 'needs_consent') throw new NeedsConsent()
+  if (!r.ok || !body.access_token) throw new Error(`Sign-in failed (${body.error ?? r.status})`)
+  return { token: { accessToken: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 }, email: body.email }
+}
+
+/** A fresh token from the server's stored sign-in. No popup, so it works while nobody is at the computer. */
+export async function serverToken(email: string): Promise<Token> {
+  const r = await post('/api/token', { email })
+  const body = await r.json().catch(() => ({}))
+  if (r.status === 401) throw new ServerSignedOut('Google sign-in expired')
+  if (!r.ok || !body.access_token) throw new Error(`Could not renew sign-in (${body.error ?? r.status})`)
+  return { accessToken: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 }
+}
+
+/**
+ * Adding an account: send the whole page to Google and back (api/login → api/callback)
+ * instead of a popup. It always comes back, and Google's own messages show in full.
+ */
+export function startFullPageSignIn(): void {
+  window.location.assign('/api/login')
+}
+
+const SIGNED_IN_COOKIE = 'cd_signed_in'
+
+/** What a full-page sign-in left behind: the account that signed in, or why it didn't. Read once. */
+export function takeFullPageResult(): { email: string } | { error: string } | null {
+  const hash = new URLSearchParams(window.location.hash.slice(1))
+  const error = hash.get('signin-error')
+  if (error) {
+    history.replaceState(null, '', window.location.pathname + window.location.search)
+    return { error }
+  }
+  const raw = document.cookie
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(SIGNED_IN_COOKIE + '='))
+  if (!raw) return null
+  document.cookie = `${SIGNED_IN_COOKIE}=; Path=/; Max-Age=0; Secure; SameSite=Strict`
+  const email = decodeURIComponent(raw.slice(SIGNED_IN_COOKIE.length + 1))
+  return email ? { email } : null
+}
+
+export function serverSignOut(email: string): void {
+  void post('/api/signout', { email }).catch(() => {})
 }
 
 export function revokeToken(token: string): void {
@@ -194,11 +365,11 @@ export class GoogleDriveSource implements DriveSource {
     }
   }
 
-  private async json<T>(url: string, signal?: AbortSignal): Promise<T> {
-    return (await this.request(url, signal)).json()
+  private async json<T>(url: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<T> {
+    return (await this.request(url, signal, headers)).json()
   }
 
-  private async listQuery(params: Record<string, string>, signal?: AbortSignal): Promise<DriveItem[]> {
+  private async listQuery(params: Record<string, string>, signal?: AbortSignal, headers?: Record<string, string>): Promise<DriveItem[]> {
     const out: DriveItem[] = []
     let pageToken: string | undefined
     do {
@@ -210,7 +381,7 @@ export class GoogleDriveSource implements DriveSource {
         ...params,
       })
       if (pageToken) qs.set('pageToken', pageToken)
-      const page = await this.json<{ files: RawFile[]; nextPageToken?: string }>(`${API}/files?${qs}`, signal)
+      const page = await this.json<{ files: RawFile[]; nextPageToken?: string }>(`${API}/files?${qs}`, signal, headers)
       out.push(...page.files.map(toItem))
       pageToken = page.nextPageToken
     } while (pageToken)
@@ -223,7 +394,7 @@ export class GoogleDriveSource implements DriveSource {
       items.map(async (item) => {
         if (item.mimeType !== SHORTCUT_MIME || !item.shortcutTarget) return item
         try {
-          const target = await this.get(item.shortcutTarget, signal)
+          const target = await this.get(item.shortcutTarget, signal, item.shortcutTargetKey)
           return { ...target, name: item.name, shortcutOf: item.id }
         } catch {
           return item // Target deleted or not shared with us; leave the shortcut so it's reported as skipped.
@@ -253,12 +424,12 @@ export class GoogleDriveSource implements DriveSource {
     }
     const q = `'${escapeQuery(folder.id)}' in parents and trashed = false`
     const scope: Record<string, string> = folder.driveId ? { corpora: 'drive', driveId: folder.driveId } : {}
-    return this.listQuery({ q, orderBy: 'folder,name_natural', ...scope }, signal)
+    return this.listQuery({ q, orderBy: 'folder,name_natural', ...scope }, signal, keyHeader(folder.id, folder.resourceKey))
   }
 
-  async get(id: string, signal?: AbortSignal): Promise<DriveItem> {
-    const raw = await this.json<RawFile>(`${API}/files/${encodeURIComponent(id)}?fields=${FIELDS}&supportsAllDrives=true`, signal)
-    return toItem(raw)
+  async get(id: string, signal?: AbortSignal, resourceKey?: string): Promise<DriveItem> {
+    const url = `${API}/files/${encodeURIComponent(id)}?fields=${FIELDS}&supportsAllDrives=true`
+    return toItem(await this.json<RawFile>(url, signal, keyHeader(id, resourceKey)))
   }
 
   async search(text: string, signal?: AbortSignal): Promise<DriveItem[]> {
@@ -267,15 +438,24 @@ export class GoogleDriveSource implements DriveSource {
 
   async open(item: DriveItem, exportMime: string | null, signal?: AbortSignal, from = 0): Promise<Response> {
     const id = encodeURIComponent(item.id)
+    const key = keyHeader(item.id, item.resourceKey)
     if (exportMime) {
-      return this.request(`${API}/files/${id}/export?mimeType=${encodeURIComponent(exportMime)}`, signal)
+      return this.request(`${API}/files/${id}/export?mimeType=${encodeURIComponent(exportMime)}`, signal, key)
     }
     // A start offset resumes a download that dropped partway through.
-    const range: Record<string, string> = from ? { Range: `bytes=${from}-` } : {}
+    const range: Record<string, string> = { ...key, ...(from ? { Range: `bytes=${from}-` } : {}) }
     // Files Google flags as malware fail with cannotDownloadAbusiveFile; we report them
     // rather than silently passing acknowledgeAbuse.
     return this.request(`${API}/files/${id}?alt=media&supportsAllDrives=true`, signal, range)
   }
+}
+
+/**
+ * Files shared by link before Google's 2021 security update need their resource key (the
+ * `resourcekey=` part of the link) sent with every request, or Drive answers 404.
+ */
+function keyHeader(id: string, resourceKey?: string): Record<string, string> {
+  return resourceKey ? { 'X-Goog-Drive-Resource-Keys': `${id}/${resourceKey}` } : {}
 }
 
 function backoff(attempt: number): number {
@@ -291,7 +471,8 @@ interface RawFile {
   modifiedTime?: string
   driveId?: string
   iconLink?: string
-  shortcutDetails?: { targetId: string; targetMimeType: string }
+  shortcutDetails?: { targetId: string; targetMimeType: string; targetResourceKey?: string }
+  resourceKey?: string
 }
 
 function toItem(f: RawFile): DriveItem {
@@ -305,5 +486,7 @@ function toItem(f: RawFile): DriveItem {
     driveId: f.driveId,
     iconLink: f.iconLink,
     shortcutTarget: f.shortcutDetails?.targetId,
+    shortcutTargetKey: f.shortcutDetails?.targetResourceKey,
+    resourceKey: f.resourceKey,
   }
 }

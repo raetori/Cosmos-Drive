@@ -16,18 +16,11 @@ const base = (props: P) => ({
   ...props,
 })
 
+/** The CosmoDrive mark: a C closing round a singularity. */
 export const Logo = (p: P) => (
-  <svg {...base({ width: 28, height: 28, ...p })} viewBox="0 0 32 32" strokeWidth={1.4}>
-    <defs>
-      <radialGradient id="cosmos-core" cx="40%" cy="35%" r="70%">
-        <stop offset="0" stopColor="#fff6dc" />
-        <stop offset=".45" stopColor="var(--accent-2)" />
-        <stop offset="1" stopColor="var(--accent)" />
-      </radialGradient>
-    </defs>
-    <circle cx="16" cy="16" r="6.2" fill="url(#cosmos-core)" stroke="none" />
-    <ellipse cx="16" cy="16" rx="14" ry="5.2" transform="rotate(-24 16 16)" stroke="var(--text)" opacity=".75" />
-    <circle cx="28.2" cy="10.6" r="1.4" fill="var(--text)" stroke="none" />
+  <svg {...base({ width: 22, height: 22, ...p })} viewBox="0 0 100 100" stroke="none" fill="currentColor">
+    <path d="M82.70,79.44A44,44 0 1 1 82.70,20.56L71.55,30.60A29,29 0 1 0 71.55,69.40Z" />
+    <circle cx="80" cy="50" r="9.5" />
   </svg>
 )
 
