@@ -9,7 +9,7 @@
 //   SESSION_KEY           optional; encrypts the cookie. Defaults to a key derived from the secret.
 //   GOOGLE_CLIENT_ID      optional; defaults to the app's public client ID below.
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
@@ -126,4 +126,53 @@ export async function emailFor(accessToken: string): Promise<string | null> {
 
 export async function revoke(token: string): Promise<void> {
   await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, { method: 'POST' }).catch(() => {})
+}
+
+// ---------------------------------------------------------------------------
+// Full-page sign-in (api/login → Google → api/callback). Google's popup reports back
+// through window.opener, and some accounts' sign-in steps cut that link, so the popup
+// closes and the app never hears back. Sending the whole page to Google and back
+// always lands, and shows Google's own messages in full.
+
+const STATE_COOKIE = 'cd_state'
+/** Readable by the page for a minute: which account just signed in, so it can add it. */
+export const SIGNED_IN_COOKIE = 'cd_signed_in'
+
+/** The site's own origin, from the request. Google only accepts redirect URIs listed on the OAuth client. */
+export function siteOrigin(req: Request): string {
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? new URL(req.url).host
+  const proto = host.startsWith('localhost') ? 'http' : 'https'
+  return `${proto}://${host}`
+}
+
+export function redirect(location: string, cookies: string[] = []): Response {
+  const h = new Headers({ Location: location, 'Cache-Control': 'no-store' })
+  for (const c of cookies) h.append('Set-Cookie', c)
+  return new Response(null, { status: 302, headers: h })
+}
+
+export function newState(): { state: string; cookie: string } {
+  const state = randomBytes(18).toString('base64url')
+  // Lax, because Google sends the person back with a top-level GET from its own site.
+  return { state, cookie: `${STATE_COOKIE}=${state}; Path=/api/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax` }
+}
+
+export function readCookie(req: Request, name: string): string | null {
+  const hit = (req.headers.get('cookie') ?? '')
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(name + '='))
+  return hit ? hit.slice(name.length + 1) : null
+}
+
+export function stateMatches(req: Request, state: string | null): boolean {
+  const expected = readCookie(req, STATE_COOKIE)
+  if (!expected || !state || expected.length !== state.length) return false
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(state))
+}
+
+export const clearState = `${STATE_COOKIE}=; Path=/api/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax`
+
+export function signedInCookie(email: string): string {
+  return `${SIGNED_IN_COOKIE}=${encodeURIComponent(email)}; Path=/; Max-Age=60; Secure; SameSite=Strict`
 }

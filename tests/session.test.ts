@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST as auth } from '../api/auth.js'
+import { GET as callback } from '../api/callback.js'
+import { GET as login } from '../api/login.js'
 import { POST as signout } from '../api/signout.js'
 import { POST as token } from '../api/token.js'
 
@@ -95,5 +97,51 @@ describe('server sign-in', () => {
   it('reports when the keys are not set', async () => {
     vi.stubEnv('GOOGLE_CLIENT_SECRET', '')
     expect((await auth(req('/api/auth', { code: 'x' }))).status).toBe(503)
+  })
+})
+
+describe('full-page sign-in', () => {
+  const get = (path: string, cookie = '') =>
+    new Request(`${ORIGIN}${path}`, { headers: { host: 'drive.example.com', ...(cookie ? { cookie } : {}) } })
+  const cookies = (r: Response) => r.headers.getSetCookie()
+
+  it('sends the page to Google with a state cookie, and comes back signed in', async () => {
+    const calls = fakeGoogle()
+    const start = login(get('/api/login'))
+    expect(start.status).toBe(302)
+    const to = new URL(start.headers.get('location')!)
+    expect(to.origin).toBe('https://accounts.google.com')
+    expect(to.searchParams.get('redirect_uri')).toBe(`${ORIGIN}/api/callback`)
+    expect(to.searchParams.get('access_type')).toBe('offline')
+    expect(to.searchParams.get('prompt')).toContain('consent')
+    const state = to.searchParams.get('state')!
+    const stateCookie = cookies(start)[0].split(';')[0]
+    expect(stateCookie).toBe(`cd_state=${state}`)
+
+    const back = await callback(get(`/api/callback?code=one-time&state=${state}`, stateCookie))
+    expect(back.status).toBe(302)
+    expect(back.headers.get('location')).toBe('/')
+    const set = cookies(back)
+    const session = set.find((c) => c.startsWith('cd_rt_'))!
+    expect(session).toMatch(/HttpOnly; Secure; SameSite=Strict/)
+    expect(session).not.toContain('rt-secret')
+    expect(set.find((c) => c.startsWith('cd_signed_in='))).toContain(encodeURIComponent('me@example.com'))
+    expect(new URLSearchParams(calls.find((c) => c.url.includes('/token'))!.body).get('redirect_uri')).toBe(`${ORIGIN}/api/callback`)
+
+    // The page then gets its first access token from the stored sign-in.
+    const t = await token(req('/api/token', { email: 'me@example.com' }, { cookie: session.split(';')[0] }))
+    expect(await t.json()).toMatchObject({ access_token: 'at-from-rt-secret' })
+  })
+
+  it('refuses a callback without the matching state', async () => {
+    fakeGoogle()
+    const back = await callback(get('/api/callback?code=one-time&state=forged', 'cd_state=real'))
+    expect(back.headers.get('location')).toBe('/#signin-error=expired')
+    expect(cookies(back).some((c) => c.startsWith('cd_rt_'))).toBe(false)
+  })
+
+  it('passes Google errors back to the app', async () => {
+    const back = await callback(get('/api/callback?error=access_denied'))
+    expect(back.headers.get('location')).toBe('/#signin-error=access_denied')
   })
 })

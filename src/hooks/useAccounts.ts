@@ -13,6 +13,8 @@ import {
   serverSignOut,
   serverToken,
   silentToken,
+  startFullPageSignIn,
+  takeFullPageResult,
   type Token,
 } from '../lib/google'
 import { load, save } from '../lib/storage'
@@ -238,6 +240,32 @@ export function useAccounts(clientId: string) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- signIn reads refs and clientId
   }, [clientId])
 
+  /**
+   * Adds an account with a full-page trip to Google when the server can keep people signed
+   * in. Returns false (nothing happened) when it can't, so the caller uses the popup.
+   */
+  const connectFullPage = useCallback(async (): Promise<boolean> => {
+    if (!(server.current || (await serverAvailable()))) return false
+    startFullPageSignIn()
+    return true
+  }, [])
+
+  /** Back from Google: add the account that signed in, or report why it didn't. Run once on load. */
+  const finishFullPage = useCallback(async (): Promise<Account | { error: string } | null> => {
+    const result = takeFullPageResult()
+    if (!result || 'error' in result) return result
+    const token = await serverToken(result.email)
+    const account = await fetchAccount(token.accessToken)
+    storeToken(account.id, token)
+    setServer(account.id, true)
+    setAccounts((prev) => {
+      const next = [...prev.filter((a) => a.id !== account.id && !a.demo), account]
+      save(ACCOUNTS_KEY, next)
+      return next
+    })
+    return account
+  }, [])
+
   /** Called from the "Reconnect" button, so the popup counts as user-initiated. */
   const finishReauth = useCallback(async () => {
     if (!reauth) return
@@ -303,7 +331,7 @@ export function useAccounts(clientId: string) {
   }, [])
 
   return useMemo(
-    () => ({ accounts, links, reauth, sourceFor, connect, finishReauth, cancelReauth, addDemo, disconnect, addLink, removeLink }),
-    [accounts, links, reauth, sourceFor, connect, finishReauth, cancelReauth, addDemo, disconnect, addLink, removeLink],
+    () => ({ accounts, links, reauth, sourceFor, connect, connectFullPage, finishFullPage, finishReauth, cancelReauth, addDemo, disconnect, addLink, removeLink }),
+    [accounts, links, reauth, sourceFor, connect, connectFullPage, finishFullPage, finishReauth, cancelReauth, addDemo, disconnect, addLink, removeLink],
   )
 }
