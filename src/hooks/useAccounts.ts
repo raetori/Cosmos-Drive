@@ -6,6 +6,7 @@ import {
   ServerSignedOut,
   SignInExpired,
   fetchAccount,
+  loadGis,
   requestToken,
   revokeToken,
   serverAvailable,
@@ -61,6 +62,8 @@ export function useAccounts(clientId: string) {
   useEffect(() => {
     // Ask early so a sign-in click can open Google's popup straight away.
     void serverAvailable().then((ok) => (server.current = ok))
+    // Load Google's script now, so a later click can open its popup straight away (Safari needs that).
+    loadGis().catch(() => {})
   }, [])
 
   /**

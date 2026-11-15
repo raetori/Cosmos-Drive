@@ -44,6 +44,15 @@ export default function App() {
 
   const fail = (e: unknown) => setToast({ text: e instanceof Error ? e.message : String(e), tone: 'warn' })
 
+  // A full-page trip to Google leaves the page, so only when nothing is downloading.
+  const busy = xfer.transfers.some((t) => t.state === 'scanning' || t.state === 'running' || t.state === 'verifying')
+
+  /** The banner's Sign in: a full-page sign-in when nothing would be cut off, else the popup. */
+  const signInAgain = async () => {
+    if (!busy && (await acc.connectFullPage())) return
+    await acc.finishReauth()
+  }
+
   const connect = useCallback(async () => {
     if (!settings.clientId) {
       // Only a developer build without VITE_GOOGLE_CLIENT_ID in .env gets here.
@@ -51,8 +60,6 @@ export default function App() {
       return
     }
     try {
-      // A full-page trip to Google leaves the page, so only when nothing is downloading.
-      const busy = xfer.transfers.some((t) => t.state === 'scanning' || t.state === 'running' || t.state === 'verifying')
       if (!busy && (await acc.connectFullPage())) return
       const account = await acc.connect()
       setLocation({ account, root: virtualRoots()[0] })
@@ -60,7 +67,7 @@ export default function App() {
       if (e instanceof SignInClosed && canRequestAccess) setDialog('blocked')
       else fail(e)
     }
-  }, [acc, settings.clientId, xfer.transfers])
+  }, [acc, settings.clientId, busy])
 
   // Back from a full-page sign-in: open the account, or say why Google didn't let it in.
   const finishFullPage = acc.finishFullPage
@@ -166,7 +173,7 @@ export default function App() {
             Downloads are paused. Google needs you to sign in again as <strong>{acc.reauth.account.email}</strong>, then
             everything picks up where it stopped. Tip: allow pop-ups for this site and we&rsquo;ll renew the sign-in for you.
           </span>
-          <button className="btn small primary" onClick={acc.finishReauth}>
+          <button className="btn small primary" onClick={signInAgain}>
             Sign in
           </button>
           <button className="btn small ghost" onClick={acc.cancelReauth}>
