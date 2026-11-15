@@ -22,5 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.vercel
 .env*.local
+
+# Secrets and local deploy state: never commit these
+# (.env holds only the public client ID and is committed on purpose)
+.vercel
+*.pem
+*.key
+*.p12
+._*

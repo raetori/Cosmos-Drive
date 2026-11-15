@@ -122,8 +122,8 @@ export function SignInSafety({ wide, children }: { wide?: boolean; children?: Re
         <li>
           <Check width={14} height={14} />
           <span>
-            <strong>Your files stay private.</strong> Nobody at CosmoDrive can see them. We have no server, so they go straight from Google
-            to your computer.
+            <strong>Your files stay private.</strong> Nobody at CosmoDrive can see them. They go straight from Google to your
+            computer and never pass through us.
           </span>
         </li>
         <li>

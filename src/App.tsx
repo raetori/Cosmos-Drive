@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Browser } from './components/Browser'
 import { LinkDialog, SettingsDialog } from './components/Dialogs'
 import { Alert, Close, Logo } from './components/Icons'
@@ -51,13 +51,29 @@ export default function App() {
       return
     }
     try {
+      // A full-page trip to Google leaves the page, so only when nothing is downloading.
+      const busy = xfer.transfers.some((t) => t.state === 'scanning' || t.state === 'running' || t.state === 'verifying')
+      if (!busy && (await acc.connectFullPage())) return
       const account = await acc.connect()
       setLocation({ account, root: virtualRoots()[0] })
     } catch (e) {
       if (e instanceof SignInClosed && canRequestAccess) setDialog('blocked')
       else fail(e)
     }
-  }, [acc, settings.clientId])
+  }, [acc, settings.clientId, xfer.transfers])
+
+  // Back from a full-page sign-in: open the account, or say why Google didn't let it in.
+  const finishFullPage = acc.finishFullPage
+  useEffect(() => {
+    finishFullPage()
+      .then((r) => {
+        if (!r) return
+        if (!('error' in r)) setLocation({ account: r, root: virtualRoots()[0] })
+        else if (r.error === 'access_denied' && canRequestAccess) setDialog('blocked')
+        else setToast({ text: signInErrorText(r.error), tone: 'warn' })
+      })
+      .catch((e) => setToast({ text: e instanceof Error ? e.message : String(e), tone: 'warn' }))
+  }, [finishFullPage])
 
   const demo = () => setLocation({ account: acc.addDemo(), root: virtualRoots()[0] })
 
@@ -350,4 +366,17 @@ function Welcome({ onConnect, onDemo, onSettings, onRequest }: { onConnect(): vo
       </p>
     </section>
   )
+}
+
+function signInErrorText(code: string): string {
+  switch (code) {
+    case 'access_denied':
+      return 'Sign-in was cancelled. If Google said access is blocked, that account isn’t on our beta list yet.'
+    case 'scope_denied':
+      return 'CosmoDrive needs permission to see your Drive. Sign in again and tick the Drive box.'
+    case 'expired':
+      return 'That sign-in took too long or came from another tab. Please try again.'
+    default:
+      return `Sign-in didn’t finish (${code}). Please try again.`
+  }
 }

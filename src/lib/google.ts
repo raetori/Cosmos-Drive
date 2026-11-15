@@ -183,14 +183,38 @@ async function post(path: string, body: unknown): Promise<Response> {
 export async function serverSignIn(clientId: string, loginHint?: string): Promise<{ token: Token; email: string }> {
   await loadGis()
   const code = await new Promise<string>((resolve, reject) => {
+    // Google's popup answers through window.opener. Some sign-in steps cut that link, and
+    // the browser then also hides whether the popup was closed, so Google never calls back.
+    // Once this page has had focus back for a few seconds with no answer, treat it as closed.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const done = () => {
+      clearTimeout(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+    const onFocus = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (!document.hasFocus()) return
+        done()
+        reject(new SignInClosed())
+      }, 4000)
+    }
+    window.addEventListener('focus', onFocus)
     window
       .google!.accounts.oauth2.initCodeClient({
         client_id: clientId,
         scope: DRIVE_SCOPE,
         ux_mode: 'popup',
         ...(loginHint ? { login_hint: loginHint } : { select_account: true }),
-        callback: (r) => (r.code ? resolve(r.code) : reject(new Error(r.error_description || r.error || 'Sign-in failed'))),
-        error_callback: (e) => reject(e.type === 'popup_closed' ? new SignInClosed() : new Error(e.message || e.type)),
+        callback: (r) => {
+          done()
+          if (r.code) resolve(r.code)
+          else reject(new Error(r.error_description || r.error || 'Sign-in failed'))
+        },
+        error_callback: (e) => {
+          done()
+          reject(e.type === 'popup_closed' ? new SignInClosed() : new Error(e.message || e.type))
+        },
       })
       .requestCode()
   })
@@ -208,6 +232,34 @@ export async function serverToken(email: string): Promise<Token> {
   if (r.status === 401) throw new ServerSignedOut('Google sign-in expired')
   if (!r.ok || !body.access_token) throw new Error(`Could not renew sign-in (${body.error ?? r.status})`)
   return { accessToken: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 }
+}
+
+/**
+ * Adding an account: send the whole page to Google and back (api/login → api/callback)
+ * instead of a popup. It always comes back, and Google's own messages show in full.
+ */
+export function startFullPageSignIn(): void {
+  window.location.assign('/api/login')
+}
+
+const SIGNED_IN_COOKIE = 'cd_signed_in'
+
+/** What a full-page sign-in left behind: the account that signed in, or why it didn't. Read once. */
+export function takeFullPageResult(): { email: string } | { error: string } | null {
+  const hash = new URLSearchParams(window.location.hash.slice(1))
+  const error = hash.get('signin-error')
+  if (error) {
+    history.replaceState(null, '', window.location.pathname + window.location.search)
+    return { error }
+  }
+  const raw = document.cookie
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(SIGNED_IN_COOKIE + '='))
+  if (!raw) return null
+  document.cookie = `${SIGNED_IN_COOKIE}=; Path=/; Max-Age=0; Secure; SameSite=Strict`
+  const email = decodeURIComponent(raw.slice(SIGNED_IN_COOKIE.length + 1))
+  return email ? { email } : null
 }
 
 export function serverSignOut(email: string): void {
