@@ -65,7 +65,7 @@ declare global {
 
 let gisLoading: Promise<void> | null = null
 
-function loadGis(): Promise<void> {
+export function loadGis(): Promise<void> {
   if (window.google?.accounts) return Promise.resolve()
   gisLoading ??= new Promise((resolve, reject) => {
     const s = document.createElement('script')
@@ -121,7 +121,8 @@ export function silentToken(clientId: string, loginHint: string, timeoutMs = 30_
 }
 
 async function tokenRequest(clientId: string, overrides: { prompt: string; login_hint?: string }, timeoutMs?: number): Promise<Token> {
-  await loadGis()
+  // Safari blocks a popup unless it opens straight from the click, so don't wait when the script is loaded.
+  if (!window.google?.accounts) await loadGis()
   return new Promise((resolve, reject) => {
     // Google doesn't always call back when a popup is blocked, so give up after a while.
     const timer = timeoutMs ? setTimeout(() => reject(new Error('Google sign-in timed out')), timeoutMs) : undefined
@@ -181,7 +182,8 @@ async function post(path: string, body: unknown): Promise<Response> {
 
 /** Opens Google's popup for a one-time code and lets the server swap it. Call from a click. */
 export async function serverSignIn(clientId: string, loginHint?: string): Promise<{ token: Token; email: string }> {
-  await loadGis()
+  // Safari blocks a popup unless it opens straight from the click, so don't wait when the script is loaded.
+  if (!window.google?.accounts) await loadGis()
   const code = await new Promise<string>((resolve, reject) => {
     // Google's popup answers through window.opener. Some sign-in steps cut that link, and
     // the browser then also hides whether the popup was closed, so Google never calls back.
